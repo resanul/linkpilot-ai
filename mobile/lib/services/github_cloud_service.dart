@@ -205,4 +205,70 @@ class GitHubCloudService {
       }
     }
   }
+
+  Future<Map<String, dynamic>> adminAssignLicenseToCustomer(
+    String userId, {
+    required String plan,
+    required String billingCycle,
+    int? durationDays,
+  }) async {
+    await fetchUsers();
+    final uIdx = _cachedUsers.indexWhere((u) => u['id'] == userId);
+    if (uIdx == -1) {
+      throw Exception('Customer not found in registry.');
+    }
+
+    final email = _cachedUsers[uIdx]['email'] as String? ?? '';
+    final planClean = plan.toLowerCase().trim();
+    final days = durationDays ?? (billingCycle == 'lifetime' ? null : 30);
+    final cycle = days != null ? '${days}_days' : 'lifetime';
+    final prefix = planClean.length >= 3 ? planClean.substring(0, 3).toUpperCase() : 'ENT';
+    final key = 'LP-$prefix-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}-${days ?? "INF"}';
+
+    // 1. Update customer in _cachedUsers
+    _cachedUsers[uIdx]['is_approved'] = true;
+    _cachedUsers[uIdx]['approved_at'] = DateTime.now().toIso8601String();
+    _cachedUsers[uIdx]['has_active_license'] = true;
+    _cachedUsers[uIdx]['license_key'] = key;
+    _cachedUsers[uIdx]['license_plan'] = planClean;
+    _cachedUsers[uIdx]['license_cycle'] = cycle;
+    _cachedUsers[uIdx]['days_remaining'] = days;
+    _cachedUsers[uIdx]['license_expires_at'] = days != null
+        ? DateTime.now().add(Duration(days: days)).toIso8601String()
+        : null;
+
+    if (_localPendingUsers.containsKey(email)) {
+      _localPendingUsers[email]!['is_approved'] = true;
+      _localPendingUsers[email]!['approved_at'] = DateTime.now().toIso8601String();
+      _localPendingUsers[email]!['has_active_license'] = true;
+      _localPendingUsers[email]!['license_key'] = key;
+      _localPendingUsers[email]!['license_plan'] = planClean;
+      _localPendingUsers[email]!['license_cycle'] = cycle;
+      _localPendingUsers[email]!['days_remaining'] = days;
+    }
+
+    // 2. Add to _cachedLicenses
+    final newLic = {
+      'id': 'lic-${DateTime.now().millisecondsSinceEpoch}',
+      'key': key,
+      'plan': planClean,
+      'billing_cycle': cycle,
+      'duration_days': days,
+      'max_devices': planClean == 'enterprise' ? 5 : 2,
+      'is_active': true,
+      'assigned_to': email,
+      'created_at': DateTime.now().toIso8601String(),
+    };
+    _cachedLicenses.insert(0, newLic);
+
+    return {
+      'status': 'assigned',
+      'user_id': userId,
+      'email': email,
+      'license_key': key,
+      'plan': planClean,
+      'billing_cycle': cycle,
+      'days_remaining': days,
+    };
+  }
 }

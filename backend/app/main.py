@@ -764,6 +764,77 @@ def admin_reject_customer(user_id: str, admin: User = Depends(current_admin), db
     log_audit(db, admin.id, admin.email, "CUSTOMER_REJECTED", "user", target_user.id, f"Suspended account {target_user.email}")
     return {"id": target_user.id, "email": target_user.email, "is_approved": False, "message": f"User {target_user.email} marked as not approved."}
 
+@app.post("/admin/customers/{user_id}/assign-license")
+def admin_assign_customer_license(
+    user_id: str,
+    plan: str = "enterprise",
+    billing_cycle: str = "monthly",
+    days: int | None = None,
+    admin: User = Depends(current_admin),
+    db: Session = Depends(get_db)
+):
+    target_user = db.query(User).filter_by(id=user_id).first()
+    if not target_user:
+        raise HTTPException(404, "User not found")
+
+    target_user.is_approved = True
+    if not target_user.approved_at:
+        target_user.approved_at = datetime.now(timezone.utc)
+
+    plan_clean = plan.lower().strip()
+    valid_plans = {"standard", "pro", "business", "enterprise"}
+    if plan_clean not in valid_plans:
+        raise HTTPException(400, f"Unsupported plan: {plan}")
+
+    duration_days = days
+    cycle = billing_cycle.lower().strip()
+    if duration_days is not None and duration_days > 0:
+        cycle = f"{duration_days}_days"
+    elif cycle == "yearly":
+        duration_days = 365
+    elif cycle == "quarterly":
+        duration_days = 90
+    elif cycle == "lifetime":
+        duration_days = None
+    else:
+        duration_days = 30
+        cycle = "monthly"
+
+    now = datetime.now(timezone.utc)
+    expiry = now + timedelta(days=duration_days) if duration_days else None
+    prefix = plan_clean[:3].upper()
+    raw_key = f"LP-{prefix}-" + secrets.token_hex(6).upper()
+
+    prev_licenses = db.query(License).filter_by(user_id=target_user.id, active=True).all()
+    for prev in prev_licenses:
+        prev.active = False
+
+    item = License(
+        id=str(uuid4()),
+        key_hash=hash_license_key(raw_key),
+        plan=plan_clean,
+        billing_cycle=cycle,
+        active=True,
+        expires_at=expiry,
+        activated_at=now,
+        max_devices=3 if plan_clean == "enterprise" else 1,
+        user_id=target_user.id
+    )
+    db.add(item)
+    db.commit()
+
+    log_audit(db, admin.id, admin.email, "LICENSE_ASSIGNED_BY_ADMIN", "user", target_user.id, f"Assigned {plan_clean.upper()} ({cycle}) to {target_user.email}")
+    return {
+        "status": "assigned",
+        "user_id": target_user.id,
+        "email": target_user.email,
+        "license_key": raw_key,
+        "plan": plan_clean,
+        "billing_cycle": cycle,
+        "days_remaining": duration_days,
+        "expires_at": expiry
+    }
+
 @app.get("/admin/staff")
 def admin_list_staff(admin: User = Depends(current_super_admin), db: Session = Depends(get_db)):
     rows = db.query(StaffAdmin).order_by(StaffAdmin.created_at.desc()).all()

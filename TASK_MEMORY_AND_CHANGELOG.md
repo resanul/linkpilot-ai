@@ -122,6 +122,14 @@ LinkPilot AI is an autonomous B2B SaaS platform that builds cybersecurity though
   - `mobile/lib/screens/login_screen.dart`: Redesigned UI with dedicated "Sign In with Google" and "Sign Up with Google" flows, live "Backend Cloud: GitHub" status badge, zero token jargon, and collapsed developer settings.
   - `mobile/test/widget_test.dart`: Updated widget tests (14/14 tests passing).
 
+### [TASK-012] Admin Customer License Direct Assignment Engine
+- **Objective**: Allow the Administrator to assign/activate a specific commercial license (plan and duration) directly against any customer's email from the Admin Console. Upon assignment, the customer's account is automatically approved, bound to the license, and immediately unlocked so they bypass the key activation prompt and enter their workspace directly.
+- **Components Built**:
+  - `backend/app/main.py`: Added `POST /admin/customers/{user_id}/assign-license` supporting custom plans (`enterprise`, `business`, `pro`, `standard`) and durations (30d, 60d, 90d, 365d, lifetime) with audit logging (`LICENSE_ASSIGNED_BY_ADMIN`).
+  - `mobile/lib/services/github_cloud_service.dart`: Added `adminAssignLicenseToCustomer(userId, plan, billingCycle, durationDays)` with automatic cloud state binding and key generation.
+  - `mobile/lib/services/api_client.dart`: Added `assignAdminCustomerLicense(...)` with dual backend/GitHub Cloud support.
+  - `mobile/lib/screens/admin/admin_customers_screen.dart`: Added modal bottom sheet with Plan Chips (`Enterprise`, `Business`, `Pro`, `Standard`), Duration Chips (`30 Days`, `60 Days`, `90 Days`, `365 Days`), one-tap "Assign & Activate License" button, quick "Approve" button, and new "Needs License (N)" / "Licensed (N)" filter chips.
+
 ---
 
 ## 🛠️ Problem & Solution Incident Ledger
@@ -140,6 +148,7 @@ LinkPilot AI is an autonomous B2B SaaS platform that builds cybersecurity though
 | **INC-010** | User Dashboard leaked "Admin Portal" toggle button | `dashboard_screen.dart` combined both user and admin views into a single screen with an AppBar switch button. | Decoupled into `DashboardScreen` (pure User) and `AdminPortalScreen` (pure Admin). Removed all admin buttons from the User view. |
 | **INC-011** | SQLite schema missing `is_approved` on existing `dev.db` | Adding new columns to SQLAlchemy model does not alter pre-existing SQLite databases automatically. | Added `ensure_db_migrations()` in FastAPI lifespan startup using `PRAGMA table_info(users)` and `ALTER TABLE users ADD COLUMN` if missing. |
 | **INC-012** | Mobile client blocked by requirement for local Backend Server URL on real device | Login screen required manual input of `http://10.0.2.2:8001`, which fails on physical hardware outside an emulator. Also exposed raw "token" terminology to non-technical users. | Converted backend architecture to use GitHub Cloud repository (`cloud/users.json`, `cloud/licenses.json`) as a serverless backend accessible from any network. Redesigned LoginScreen with direct Google email input and hidden developer overrides. |
+| **INC-013** | Unused element warning on `_approveCustomer` after license bottom sheet integration | Assigning a license auto-approved the customer, leaving the raw approval method uncalled in the UI. | Added a separate "Quick Approve" button next to "Reject" for customers who need verification prior to licensing. |
 
 ---
 

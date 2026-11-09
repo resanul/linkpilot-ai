@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../services/api_client.dart';
 
-enum CustomerFilter { all, pending, approved }
+enum CustomerFilter { all, pending, noLicense, licensed }
 
 class AdminCustomersScreen extends StatefulWidget {
   final ApiClient apiClient;
@@ -121,15 +121,243 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
     }
   }
 
+  Future<void> _openAssignLicenseSheet(Map<String, dynamic> customer) async {
+    final userId = customer['id'] as String;
+    final email = customer['email'] as String? ?? 'User';
+
+    String selectedPlan = 'enterprise';
+    int selectedDays = 30;
+
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 24,
+                right: 24,
+                top: 24,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.shade100,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.vpn_key_rounded, color: Colors.amber, size: 24),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Assign License to Customer',
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              email,
+                              style: const TextStyle(fontSize: 13, color: Colors.black54),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Plan Selection
+                  const Text(
+                    'Select Commercial Plan',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _buildPlanOption('enterprise', 'Enterprise (Full)', selectedPlan, (p) {
+                        setSheetState(() => selectedPlan = p);
+                      }),
+                      _buildPlanOption('business', 'Business', selectedPlan, (p) {
+                        setSheetState(() => selectedPlan = p);
+                      }),
+                      _buildPlanOption('pro', 'Pro', selectedPlan, (p) {
+                        setSheetState(() => selectedPlan = p);
+                      }),
+                      _buildPlanOption('standard', 'Standard', selectedPlan, (p) {
+                        setSheetState(() => selectedPlan = p);
+                      }),
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // Duration Selection
+                  const Text(
+                    'Select Duration / Billing Cycle',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _buildDurationOption(30, '30 Days', selectedDays, (d) {
+                        setSheetState(() => selectedDays = d);
+                      }),
+                      _buildDurationOption(60, '60 Days', selectedDays, (d) {
+                        setSheetState(() => selectedDays = d);
+                      }),
+                      _buildDurationOption(90, '90 Days (Quarterly)', selectedDays, (d) {
+                        setSheetState(() => selectedDays = d);
+                      }),
+                      _buildDurationOption(365, '365 Days (1 Year)', selectedDays, (d) {
+                        setSheetState(() => selectedDays = d);
+                      }),
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // Info Note
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.blue.shade100),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.info_outline, color: Color(0xFF2563EB), size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Assigning will automatically approve $email and activate instant access for $selectedDays days.',
+                            style: const TextStyle(fontSize: 12, color: Color(0xFF1E3A8A)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Confirm Button
+                  SizedBox(
+                    height: 50,
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF2563EB),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () => Navigator.pop(ctx, true),
+                      icon: const Icon(Icons.check_circle_outline, size: 20),
+                      label: Text(
+                        'Activate ${selectedPlan.toUpperCase()} ($selectedDays Days)',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _processingUserIds.add(userId));
+    try {
+      final res = await widget.apiClient.assignAdminCustomerLicense(
+        userId,
+        plan: selectedPlan,
+        billingCycle: '${selectedDays}_days',
+        days: selectedDays,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'License activated for $email! Plan: ${res["plan"].toString().toUpperCase()} ($selectedDays days)',
+          ),
+          backgroundColor: const Color(0xFF10B981),
+        ),
+      );
+      await _loadCustomers();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to assign license: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _processingUserIds.remove(userId));
+    }
+  }
+
+  Widget _buildPlanOption(String plan, String label, String current, Function(String) onSelect) {
+    final isSelected = plan == current;
+    return ChoiceChip(
+      label: Text(label),
+      selected: isSelected,
+      onSelected: (_) => onSelect(plan),
+      selectedColor: const Color(0xFF2563EB),
+      labelStyle: TextStyle(
+        color: isSelected ? Colors.white : Colors.black87,
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        fontSize: 12,
+      ),
+    );
+  }
+
+  Widget _buildDurationOption(int days, String label, int current, Function(int) onSelect) {
+    final isSelected = days == current;
+    return ChoiceChip(
+      label: Text(label),
+      selected: isSelected,
+      onSelected: (_) => onSelect(days),
+      selectedColor: const Color(0xFF14213D),
+      labelStyle: TextStyle(
+        color: isSelected ? Colors.white : Colors.black87,
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        fontSize: 12,
+      ),
+    );
+  }
+
   int get _pendingCount =>
       _customers.where((c) => (c['is_approved'] as bool?) == false).length;
+
+  int get _noLicenseCount =>
+      _customers.where((c) => (c['has_active_license'] as bool?) != true).length;
 
   List<Map<String, dynamic>> get _filteredCustomers {
     var list = _customers;
     if (_activeFilter == CustomerFilter.pending) {
       list = list.where((c) => (c['is_approved'] as bool?) == false).toList();
-    } else if (_activeFilter == CustomerFilter.approved) {
-      list = list.where((c) => (c['is_approved'] as bool?) == true).toList();
+    } else if (_activeFilter == CustomerFilter.noLicense) {
+      list = list.where((c) => (c['has_active_license'] as bool?) != true).toList();
+    } else if (_activeFilter == CustomerFilter.licensed) {
+      list = list.where((c) => (c['has_active_license'] as bool?) == true).toList();
     }
 
     if (_searchQuery.trim().isEmpty) return list;
@@ -190,7 +418,7 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
                   ),
                 ),
 
-                // Filter Tabs: All, Pending Approval, Approved
+                // Filter Tabs
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                   child: SingleChildScrollView(
@@ -211,9 +439,16 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
                         ),
                         const SizedBox(width: 8),
                         _buildFilterChip(
-                          label: 'Approved (${_customers.length - _pendingCount})',
-                          isSelected: _activeFilter == CustomerFilter.approved,
-                          onTap: () => setState(() => _activeFilter = CustomerFilter.approved),
+                          label: 'Needs License ($_noLicenseCount)',
+                          isSelected: _activeFilter == CustomerFilter.noLicense,
+                          isHighlight: _noLicenseCount > 0,
+                          onTap: () => setState(() => _activeFilter = CustomerFilter.noLicense),
+                        ),
+                        const SizedBox(width: 8),
+                        _buildFilterChip(
+                          label: 'Licensed (${_customers.length - _noLicenseCount})',
+                          isSelected: _activeFilter == CustomerFilter.licensed,
+                          onTap: () => setState(() => _activeFilter = CustomerFilter.licensed),
                         ),
                       ],
                     ),
@@ -241,13 +476,15 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
                               final isProcessing = _processingUserIds.contains(id);
 
                               return Card(
-                                margin: const EdgeInsets.only(bottom: 12),
+                                margin: const EdgeInsets.only(bottom: 14),
                                 elevation: 0,
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
+                                  borderRadius: BorderRadius.circular(16),
                                   side: BorderSide(
-                                    color: !isApproved ? Colors.amber.shade300 : Colors.grey.shade200,
-                                    width: !isApproved ? 1.5 : 1.0,
+                                    color: !isApproved
+                                        ? Colors.amber.shade300
+                                        : (hasLic ? Colors.green.shade200 : Colors.grey.shade300),
+                                    width: !isApproved || hasLic ? 1.5 : 1.0,
                                   ),
                                 ),
                                 child: Padding(
@@ -261,10 +498,14 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
                                             radius: 18,
                                             backgroundColor: !isApproved
                                                 ? Colors.amber.shade100
-                                                : blue.withValues(alpha: 0.1),
+                                                : (hasLic ? Colors.green.shade100 : blue.withValues(alpha: 0.1)),
                                             child: Icon(
-                                              !isApproved ? Icons.hourglass_top_rounded : Icons.person,
-                                              color: !isApproved ? Colors.amber.shade900 : blue,
+                                              !isApproved
+                                                  ? Icons.hourglass_top_rounded
+                                                  : (hasLic ? Icons.verified_user : Icons.person),
+                                              color: !isApproved
+                                                  ? Colors.amber.shade900
+                                                  : (hasLic ? Colors.green.shade800 : blue),
                                               size: 20,
                                             ),
                                           ),
@@ -278,7 +519,7 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
                                               ],
                                             ),
                                           ),
-                                          // Approval Badge
+                                          // Status Badges
                                           Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                             decoration: BoxDecoration(
@@ -305,13 +546,13 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
                                           Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                             decoration: BoxDecoration(
-                                              color: hasLic ? Colors.green.shade100 : Colors.grey.shade200,
+                                              color: hasLic ? Colors.green.shade100 : Colors.red.shade50,
                                               borderRadius: BorderRadius.circular(6),
                                             ),
                                             child: Text(
                                               hasLic ? 'ACTIVE: ${plan?.toUpperCase() ?? "STANDARD"} ($cycle)' : 'NO ACTIVE LICENSE',
                                               style: TextStyle(
-                                                color: hasLic ? Colors.green.shade900 : Colors.black54,
+                                                color: hasLic ? Colors.green.shade900 : Colors.red.shade800,
                                                 fontWeight: FontWeight.bold,
                                                 fontSize: 10,
                                               ),
@@ -342,47 +583,64 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
                                         ],
                                       ),
 
-                                      // Approval Actions Row
-                                      const SizedBox(height: 12),
+                                      const SizedBox(height: 14),
+
+                                      // Actions Row: Assign License & Approval Controls
                                       Row(
-                                        mainAxisAlignment: MainAxisAlignment.end,
                                         children: [
-                                          if (!isApproved) ...[
-                                            OutlinedButton.icon(
-                                              style: OutlinedButton.styleFrom(
-                                                foregroundColor: Colors.red.shade700,
-                                                side: BorderSide(color: Colors.red.shade300),
-                                                visualDensity: VisualDensity.compact,
-                                              ),
-                                              onPressed: isProcessing ? null : () => _rejectCustomer(id, email),
-                                              icon: const Icon(Icons.close, size: 16),
-                                              label: const Text('Reject', style: TextStyle(fontSize: 12)),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            FilledButton.icon(
+                                          // Assign / Extend License Button
+                                          Expanded(
+                                            child: FilledButton.icon(
                                               style: FilledButton.styleFrom(
-                                                backgroundColor: const Color(0xFF10B981),
+                                                backgroundColor: hasLic ? const Color(0xFF0F766E) : const Color(0xFF2563EB),
                                                 visualDensity: VisualDensity.compact,
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                               ),
-                                              onPressed: isProcessing ? null : () => _approveCustomer(id, email),
+                                              onPressed: isProcessing ? null : () => _openAssignLicenseSheet(c),
                                               icon: isProcessing
                                                   ? const SizedBox(
                                                       width: 14,
                                                       height: 14,
                                                       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                                                     )
-                                                  : const Icon(Icons.check, size: 16),
-                                              label: const Text('Approve Access', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                                  : Icon(hasLic ? Icons.autorenew_rounded : Icons.vpn_key_rounded, size: 16),
+                                              label: Text(
+                                                hasLic ? 'Reassign / Extend License' : 'Assign & Activate License',
+                                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          if (!isApproved) ...[
+                                            OutlinedButton(
+                                              style: OutlinedButton.styleFrom(
+                                                foregroundColor: const Color(0xFF10B981),
+                                                side: const BorderSide(color: Color(0xFF10B981)),
+                                                visualDensity: VisualDensity.compact,
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                              ),
+                                              onPressed: isProcessing ? null : () => _approveCustomer(id, email),
+                                              child: const Text('Approve', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                            ),
+                                            const SizedBox(width: 6),
+                                            OutlinedButton(
+                                              style: OutlinedButton.styleFrom(
+                                                foregroundColor: Colors.red.shade700,
+                                                side: BorderSide(color: Colors.red.shade300),
+                                                visualDensity: VisualDensity.compact,
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                              ),
+                                              onPressed: isProcessing ? null : () => _rejectCustomer(id, email),
+                                              child: const Text('Reject', style: TextStyle(fontSize: 12)),
                                             ),
                                           ] else ...[
-                                            TextButton.icon(
+                                            TextButton(
                                               style: TextButton.styleFrom(
                                                 foregroundColor: Colors.red.shade700,
                                                 visualDensity: VisualDensity.compact,
                                               ),
                                               onPressed: isProcessing ? null : () => _rejectCustomer(id, email),
-                                              icon: const Icon(Icons.block, size: 14),
-                                              label: const Text('Revoke / Reject', style: TextStyle(fontSize: 11)),
+                                              child: const Text('Revoke', style: TextStyle(fontSize: 11)),
                                             ),
                                           ],
                                         ],

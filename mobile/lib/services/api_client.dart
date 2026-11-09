@@ -438,6 +438,31 @@ class ApiClient {
     }
   }
 
+  Future<Map<String, dynamic>> assignAdminCustomerLicense(
+    String userId, {
+    required String plan,
+    required String billingCycle,
+    int? days,
+  }) async {
+    try {
+      final Map<String, dynamic> params = {'plan': plan, 'billing_cycle': billingCycle};
+      if (days != null && days > 0) {
+        params['days'] = days.toString();
+      }
+      final uri = _uri('/admin/customers/$userId/assign-license', params);
+      final headers = await _headers();
+      final res = await http.post(uri, headers: headers).timeout(const Duration(seconds: 4));
+      return await _handleResponse(res) as Map<String, dynamic>;
+    } catch (_) {
+      return await GitHubCloudService.instance.adminAssignLicenseToCustomer(
+        userId,
+        plan: plan,
+        billingCycle: billingCycle,
+        durationDays: days,
+      );
+    }
+  }
+
   Future<List<Map<String, dynamic>>> getAdminStaff() async {
     final uri = _uri('/admin/staff');
     final headers = await _headers();
