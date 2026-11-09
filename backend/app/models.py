@@ -9,6 +9,8 @@ class User(Base):
     google_sub: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     email: Mapped[str] = mapped_column(String(320), index=True)
     role: Mapped[str] = mapped_column(String(20), default="user")
+    is_approved: Mapped[bool] = mapped_column(Boolean, default=False)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class License(Base):

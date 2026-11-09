@@ -76,6 +76,8 @@ class UserProfileOut(BaseModel):
     email: str
     role: str
     admin_role: str | None = None
+    is_approved: bool = True
+    approved_at: datetime | None = None
     has_active_license: bool
     license_plan: str | None = None
     license_cycle: str | None = None

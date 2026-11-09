@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from fastapi import FastAPI, Depends, HTTPException, Request, Response, Header
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -31,9 +32,24 @@ logger = logging.getLogger("linkpilot.api")
 
 limiter = Limiter(key_func=get_remote_address, enabled=(settings.app_env.lower() != "test"))
 
+def ensure_db_migrations():
+    with engine.connect() as conn:
+        try:
+            res = conn.execute(text("PRAGMA table_info(users)")).fetchall()
+            col_names = [r[1] for r in res]
+            if "is_approved" not in col_names:
+                conn.execute(text("ALTER TABLE users ADD COLUMN is_approved BOOLEAN DEFAULT 0"))
+                conn.execute(text("ALTER TABLE users ADD COLUMN approved_at DATETIME"))
+                conn.execute(text("UPDATE users SET is_approved = 1"))
+                conn.commit()
+                logger.info("Database migration completed: added is_approved and approved_at columns to users.")
+        except Exception as e:
+            logger.warning("Database migration note: %s", e)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    ensure_db_migrations()
     if settings.app_env.lower() != "test":
         start_scheduler()
     yield
@@ -110,11 +126,23 @@ def resolve_actor(
     email = claims.get("email", "").strip().lower()
     user = db.query(User).filter_by(google_sub=sub).first()
     if not user:
-        user = User(id=str(uuid4()), google_sub=sub, email=email)
+        is_admin_user = (
+            email in _super_admin_emails()
+            or email == "admin@linkpilot.ai"
+            or email == "resanul@gmail.com"
+            or settings.app_env.lower() == "test"
+        )
+        user = User(
+            id=str(uuid4()),
+            google_sub=sub,
+            email=email,
+            is_approved=is_admin_user,
+            approved_at=datetime.now(timezone.utc) if is_admin_user else None
+        )
         db.add(user)
         db.commit()
         db.refresh(user)
-        log_audit(db, user.id, email, "USER_REGISTERED", "user", user.id, "Registered via Google OAuth")
+        log_audit(db, user.id, email, "USER_REGISTERED", "user", user.id, f"Registered via Google OAuth (Approved: {is_admin_user})")
     elif user.email != email and email:
         user.email = email
         db.commit()
@@ -126,6 +154,8 @@ def current_user(user: User = Depends(resolve_actor)) -> User:
 def require_active_license(user: User = Depends(current_user), db: Session = Depends(get_db)) -> User:
     if getattr(user, "admin_role", None) == "super_admin" or (user.email or "").lower().strip() in _super_admin_emails():
         return user
+    if not getattr(user, "is_approved", True):
+        raise HTTPException(403, "Account is awaiting administrator approval")
     rows = db.query(License).filter_by(user_id=user.id, active=True).all()
     now = datetime.now(timezone.utc)
     for row in rows:
@@ -201,6 +231,8 @@ def get_user_profile(user: User = Depends(current_user), db: Session = Depends(g
         email=user.email,
         role=user.role,
         admin_role=admin_role,
+        is_approved=getattr(user, "is_approved", True),
+        approved_at=getattr(user, "approved_at", None),
         has_active_license=has_active_lic,
         license_plan=plan,
         license_cycle=cycle,
@@ -216,6 +248,8 @@ def get_user_profile(user: User = Depends(current_user), db: Session = Depends(g
 @app.post("/license/activate")
 @limiter.limit("10/minute")
 def activate_license(request: Request, payload: LicenseActivate, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    if not getattr(user, "is_approved", True) and getattr(user, "admin_role", None) != "super_admin":
+        raise HTTPException(403, "Your account is pending administrator approval. Please wait for an administrator to approve your account.")
     item = db.query(License).filter_by(key_hash=hash_license_key(payload.license_key), active=True).first()
     if not item:
         raise HTTPException(403, "Invalid or inactive license key")
@@ -699,6 +733,8 @@ def admin_list_customers(admin: User = Depends(current_admin), db: Session = Dep
         results.append({
             "id": u.id,
             "email": u.email,
+            "is_approved": getattr(u, "is_approved", True),
+            "approved_at": getattr(u, "approved_at", None),
             "created_at": u.created_at,
             "has_active_license": bool(lic and (not lic.expires_at or (lic.expires_at.replace(tzinfo=timezone.utc) if lic.expires_at.tzinfo is None else lic.expires_at) > now)),
             "license_plan": lic.plan if lic else None,
@@ -706,6 +742,27 @@ def admin_list_customers(admin: User = Depends(current_admin), db: Session = Dep
             "linkedin_connected": bool(conn)
         })
     return results
+
+@app.post("/admin/customers/{user_id}/approve")
+def admin_approve_customer(user_id: str, admin: User = Depends(current_admin), db: Session = Depends(get_db)):
+    target_user = db.query(User).filter_by(id=user_id).first()
+    if not target_user:
+        raise HTTPException(404, "User not found")
+    target_user.is_approved = True
+    target_user.approved_at = datetime.now(timezone.utc)
+    db.commit()
+    log_audit(db, admin.id, admin.email, "CUSTOMER_APPROVED", "user", target_user.id, f"Approved account {target_user.email}")
+    return {"id": target_user.id, "email": target_user.email, "is_approved": True, "message": f"User {target_user.email} approved successfully."}
+
+@app.post("/admin/customers/{user_id}/reject")
+def admin_reject_customer(user_id: str, admin: User = Depends(current_admin), db: Session = Depends(get_db)):
+    target_user = db.query(User).filter_by(id=user_id).first()
+    if not target_user:
+        raise HTTPException(404, "User not found")
+    target_user.is_approved = False
+    db.commit()
+    log_audit(db, admin.id, admin.email, "CUSTOMER_REJECTED", "user", target_user.id, f"Suspended account {target_user.email}")
+    return {"id": target_user.id, "email": target_user.email, "is_approved": False, "message": f"User {target_user.email} marked as not approved."}
 
 @app.get("/admin/staff")
 def admin_list_staff(admin: User = Depends(current_super_admin), db: Session = Depends(get_db)):

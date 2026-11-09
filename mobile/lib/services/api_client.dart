@@ -395,6 +395,20 @@ class ApiClient {
     return list.map((e) => e as Map<String, dynamic>).toList();
   }
 
+  Future<Map<String, dynamic>> approveAdminCustomer(String userId) async {
+    final uri = _uri('/admin/customers/$userId/approve');
+    final headers = await _headers();
+    final res = await http.post(uri, headers: headers).timeout(const Duration(seconds: 15));
+    return await _handleResponse(res) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> rejectAdminCustomer(String userId) async {
+    final uri = _uri('/admin/customers/$userId/reject');
+    final headers = await _headers();
+    final res = await http.post(uri, headers: headers).timeout(const Duration(seconds: 15));
+    return await _handleResponse(res) as Map<String, dynamic>;
+  }
+
   Future<List<Map<String, dynamic>>> getAdminStaff() async {
     final uri = _uri('/admin/staff');
     final headers = await _headers();

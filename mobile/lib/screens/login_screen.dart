@@ -3,6 +3,7 @@ import '../models/user_model.dart';
 import '../services/secure_storage_service.dart';
 import '../services/api_client.dart';
 import 'license_activation_screen.dart';
+import 'pending_approval_screen.dart';
 import 'dashboard_screen.dart';
 import 'admin/admin_portal_screen.dart';
 
@@ -131,7 +132,16 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
 
-      if (!forceAdmin && !user.isAdmin && !user.hasActiveLicense) {
+      if (!forceAdmin && !user.isAdmin && !user.isApproved) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => PendingApprovalScreen(
+              apiClient: widget.apiClient,
+              user: user,
+            ),
+          ),
+        );
+      } else if (!forceAdmin && !user.isAdmin && !user.hasActiveLicense) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
             builder: (_) => LicenseActivationScreen(

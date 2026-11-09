@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:linkedin_ai_automation/services/api_client.dart';
 import 'package:linkedin_ai_automation/services/sync_service.dart';
 import 'package:linkedin_ai_automation/screens/login_screen.dart';
+import 'package:linkedin_ai_automation/screens/pending_approval_screen.dart';
 import 'package:linkedin_ai_automation/screens/license_activation_screen.dart';
 import 'package:linkedin_ai_automation/screens/ai_generator_screen.dart';
 import 'package:linkedin_ai_automation/screens/post_editor_screen.dart';
@@ -101,5 +102,30 @@ void main() {
     expect(find.text('Compose Post'), findsOneWidget);
     expect(find.text('Save Post'), findsOneWidget);
     expect(find.text('Require Manual Approval'), findsOneWidget);
+  });
+
+  testWidgets('PendingApprovalScreen renders review state and actions', (WidgetTester tester) async {
+    final client = ApiClient(baseUrl: 'http://127.0.0.1:8000');
+    final pendingUser = UserModel(
+      id: 'u-pending-1',
+      email: 'newapplicant@gmail.com',
+      role: 'user',
+      isApproved: false,
+      hasActiveLicense: false,
+      linkedinConnected: false,
+      createdAt: DateTime.now(),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PendingApprovalScreen(apiClient: client, user: pendingUser),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Approval Pending'), findsOneWidget);
+    expect(find.text('newapplicant@gmail.com'), findsOneWidget);
+    expect(find.text('Awaiting Approval'), findsOneWidget);
+    expect(find.text('Check Approval Status'), findsOneWidget);
   });
 }

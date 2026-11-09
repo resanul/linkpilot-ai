@@ -94,6 +94,25 @@ LinkPilot AI is an autonomous B2B SaaS platform that builds cybersecurity though
   - Stripped all `_adminMode`, `_promptAdminPin`, and `adminPages` from `mobile/lib/screens/dashboard_screen.dart`.
   - Created standalone `mobile/lib/screens/admin/admin_portal_screen.dart` with dedicated AppBar, Overview, Licenses, Customers, and Audit Logs tabs, and an explicit "Exit Admin" button.
 
+### [TASK-010] Google Account Onboarding & Admin Approval Gate
+- **Objective**: Prevent unapproved users from immediately gaining access upon logging in with Google. All new accounts enter a `pending_approval` state (`is_approved = False`). Admins review new users in the Admin Console and approve or reject them. Until approved, the user sees an "Approval Pending" screen and cannot activate licenses or access the workspace.
+- **Components Built**:
+  - `backend/app/models.py`: Added `is_approved: Mapped[bool] = mapped_column(Boolean, default=False)` and `approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)` to `User`.
+  - `backend/app/schemas.py`: Added `is_approved` and `approved_at` to `UserProfileOut`.
+  - `backend/app/main.py`:
+    - Added `ensure_db_migrations()` during startup lifespan to execute automatic `ALTER TABLE users ADD COLUMN is_approved ...` on SQLite.
+    - Updated `resolve_actor`: Automatically approves admins (`resanul@gmail.com`, `admin@linkpilot.ai`, `settings.admin_emails`, or `test` env). New users default to `is_approved = False`.
+    - Updated `require_active_license` and `activate_license`: Block unapproved users with `HTTP 403 Account is awaiting administrator approval`.
+    - Added endpoints:
+      - `POST /admin/customers/{user_id}/approve`: Approves user and logs audit `CUSTOMER_APPROVED`.
+      - `POST /admin/customers/{user_id}/reject`: Suspends user and logs audit `CUSTOMER_REJECTED`.
+  - `mobile/lib/models/user_model.dart`: Added `isApproved` and `approvedAt` fields and updated factory constructors.
+  - `mobile/lib/services/api_client.dart`: Added `approveAdminCustomer(userId)` and `rejectAdminCustomer(userId)`.
+  - `mobile/lib/screens/pending_approval_screen.dart`: Created dedicated waiting screen with live status polling, account email, review badge, and sign-out options.
+  - `mobile/lib/screens/login_screen.dart`: Intercepts unapproved users and routes them to `PendingApprovalScreen`.
+  - `mobile/lib/screens/admin/admin_customers_screen.dart`: Added filter pills (`All`, `Pending Approval (N)`, `Approved`), pending approval badges, and direct **[ ✅ Approve Access ]** and **[ ❌ Reject ]** buttons.
+  - `mobile/test/widget_test.dart`: Added widget test for `PendingApprovalScreen`.
+
 ---
 
 ## 🛠️ Problem & Solution Incident Ledger
@@ -110,6 +129,7 @@ LinkPilot AI is an autonomous B2B SaaS platform that builds cybersecurity though
 | **INC-008** | Missing Google ID token error when testing direct email login | `security.py` only parsed tokens starting with `test-token-`. | Updated `security.py` to accept any direct email string containing `@` (e.g., `user@gmail.com`) in development mode. |
 | **INC-009** | Login screen was never visible on app launch | `splash_screen.dart` had an auto-login bypass that loaded `DashboardScreen` immediately upon launch. | Rewrote `splash_screen.dart` `_checkSession` to navigate directly to `LoginScreen`. |
 | **INC-010** | User Dashboard leaked "Admin Portal" toggle button | `dashboard_screen.dart` combined both user and admin views into a single screen with an AppBar switch button. | Decoupled into `DashboardScreen` (pure User) and `AdminPortalScreen` (pure Admin). Removed all admin buttons from the User view. |
+| **INC-011** | SQLite schema missing `is_approved` on existing `dev.db` | Adding new columns to SQLAlchemy model does not alter pre-existing SQLite databases automatically. | Added `ensure_db_migrations()` in FastAPI lifespan startup using `PRAGMA table_info(users)` and `ALTER TABLE users ADD COLUMN` if missing. |
 
 ---
 

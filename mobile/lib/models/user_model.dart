@@ -10,6 +10,8 @@ class UserModel {
   final int? daysRemaining;
   final bool linkedinConnected;
   final String? linkedinProfileName;
+  final bool isApproved;
+  final DateTime? approvedAt;
   final DateTime createdAt;
 
   UserModel({
@@ -24,6 +26,8 @@ class UserModel {
     this.daysRemaining,
     required this.linkedinConnected,
     this.linkedinProfileName,
+    this.isApproved = true,
+    this.approvedAt,
     required this.createdAt,
   });
 
@@ -35,6 +39,7 @@ class UserModel {
     bool linkedinConnected = false,
     String? linkedinProfileName,
     int? daysRemaining = 30,
+    bool isApproved = true,
   }) {
     return UserModel(
       id: 'project-owner',
@@ -47,6 +52,8 @@ class UserModel {
       daysRemaining: daysRemaining,
       linkedinConnected: linkedinConnected,
       linkedinProfileName: linkedinProfileName,
+      isApproved: isApproved,
+      approvedAt: DateTime.now(),
       createdAt: DateTime.now(),
     );
   }
@@ -64,6 +71,8 @@ class UserModel {
       licenseCycle: 'lifetime',
       daysRemaining: null,
       linkedinConnected: false,
+      isApproved: true,
+      approvedAt: DateTime.now(),
       createdAt: DateTime.now(),
     );
   }
@@ -71,6 +80,7 @@ class UserModel {
   factory UserModel.customerUser({
     String email = 'customer@linkpilot.ai',
     bool hasLicense = false,
+    bool isApproved = true,
   }) {
     return UserModel(
       id: 'customer-client',
@@ -82,6 +92,8 @@ class UserModel {
       licenseCycle: hasLicense ? '30_days' : null,
       daysRemaining: hasLicense ? 30 : null,
       linkedinConnected: false,
+      isApproved: isApproved,
+      approvedAt: isApproved ? DateTime.now() : null,
       createdAt: DateTime.now(),
     );
   }
@@ -101,6 +113,10 @@ class UserModel {
       daysRemaining: json['days_remaining'] as int?,
       linkedinConnected: (json['linkedin_connected'] as bool?) ?? false,
       linkedinProfileName: json['linkedin_profile_name'] as String?,
+      isApproved: (json['is_approved'] as bool?) ?? true,
+      approvedAt: json['approved_at'] != null
+          ? DateTime.tryParse(json['approved_at'] as String)
+          : null,
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String)
           : DateTime.now(),
