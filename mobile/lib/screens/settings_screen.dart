@@ -26,14 +26,11 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _apiUrlController = TextEditingController();
-  final TextEditingController _geminiKeyController = TextEditingController();
   final TextEditingController _linkedInTokenController = TextEditingController();
   final TextEditingController _customTopicController = TextEditingController();
 
   bool _isSavingUrl = false;
-  bool _isSavingGeminiKey = false;
   bool _isConnectingLinkedIn = false;
-  bool _obscureGeminiKey = true;
 
   final List<String> _availableDomains = [
     'SOC operations',
@@ -60,13 +57,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadSettings() async {
     final url = await widget.apiClient.getBaseUrl();
-    final geminiKey = await SecureStorageService.instance.getGeminiApiKey();
     final savedTopics = await SecureStorageService.instance.getPreferredTopics();
 
     if (!mounted) return;
     setState(() {
       _apiUrlController.text = url;
-      if (geminiKey != null) _geminiKeyController.text = geminiKey;
       _selectedTopics = savedTopics.isNotEmpty
           ? List.from(savedTopics)
           : ['Cloud security', 'Threat intelligence', 'Incident response'];
@@ -81,17 +76,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _isSavingUrl = false);
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('API Server URL updated.')),
-    );
-  }
-
-  Future<void> _saveGeminiKey() async {
-    setState(() => _isSavingGeminiKey = true);
-    final key = _geminiKeyController.text.trim();
-    await SecureStorageService.instance.saveGeminiApiKey(key);
-    if (!mounted) return;
-    setState(() => _isSavingGeminiKey = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(key.isEmpty ? 'Gemini API Key removed.' : 'Gemini API Key saved securely!')),
     );
   }
 
@@ -233,10 +217,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
 
             const SizedBox(height: 20),
-            const Text('API KEYS & INTEGRATIONS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black54)),
+            const Text('AI & INTEGRATIONS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black54)),
             const SizedBox(height: 8),
 
-            // Google Gemini API Key Card
+            // LinkPilot Neural AI Engine Card
             Card(
               elevation: 0,
               shape: RoundedRectangleBorder(
@@ -249,39 +233,60 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
-                      children: const [
-                        Icon(Icons.auto_awesome, color: Color(0xFF7C3AED), size: 20),
-                        SizedBox(width: 8),
-                        Text('Google Gemini API Key', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF2563EB).withValues(alpha: 0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.bolt, color: Color(0xFF2563EB), size: 20),
+                        ),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'LinkPilot Neural AI Engine',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
+                              Text(
+                                'Fully managed by LinkPilot backend',
+                                style: TextStyle(fontSize: 11, color: Colors.black45),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.green.shade200),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.check_circle, size: 12, color: Color(0xFF10B981)),
+                              SizedBox(width: 4),
+                              Text(
+                                'ACTIVE',
+                                style: TextStyle(
+                                  color: Color(0xFF10B981),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    const Text('Used to generate technical cybersecurity posts on-device or via cloud.', style: TextStyle(fontSize: 12, color: Colors.black54)),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _geminiKeyController,
-                      obscureText: _obscureGeminiKey,
-                      decoration: InputDecoration(
-                        hintText: 'AIzaSy...',
-                        filled: true,
-                        fillColor: Colors.grey.shade50,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        suffixIcon: IconButton(
-                          icon: Icon(_obscureGeminiKey ? Icons.visibility : Icons.visibility_off, size: 20),
-                          onPressed: () => setState(() => _obscureGeminiKey = !_obscureGeminiKey),
-                        ),
-                      ),
-                    ),
                     const SizedBox(height: 10),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: FilledButton.icon(
-                        onPressed: _isSavingGeminiKey ? null : _saveGeminiKey,
-                        icon: const Icon(Icons.check, size: 16),
-                        label: Text(_isSavingGeminiKey ? 'Saving...' : 'Save Gemini Key'),
-                        style: FilledButton.styleFrom(backgroundColor: const Color(0xFF7C3AED)),
-                      ),
+                    const Text(
+                      'AI synthesis is integrated directly into your commercial plan. You do not need to configure any external API keys or models.',
+                      style: TextStyle(fontSize: 12, color: Colors.black54, height: 1.4),
                     ),
                   ],
                 ),

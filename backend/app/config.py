@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     ai_provider: str = "gemini"
     ai_api_key: str = ""
     ai_model: str = "gemini-2.5-flash"
+    openrouter_api_key: str = ""
+    openai_api_key: str = ""
     token_encryption_key: str = ""  # Fernet key; use a managed KMS in production
     license_signing_secret: str = ""  # long random secret; required outside development
     admin_emails: str = ""

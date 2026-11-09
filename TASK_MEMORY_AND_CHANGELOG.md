@@ -130,6 +130,16 @@ LinkPilot AI is an autonomous B2B SaaS platform that builds cybersecurity though
   - `mobile/lib/services/api_client.dart`: Added `assignAdminCustomerLicense(...)` with dual backend/GitHub Cloud support.
   - `mobile/lib/screens/admin/admin_customers_screen.dart`: Added modal bottom sheet with Plan Chips (`Enterprise`, `Business`, `Pro`, `Standard`), Duration Chips (`30 Days`, `60 Days`, `90 Days`, `365 Days`), one-tap "Assign & Activate License" button, quick "Approve" button, and new "Needs License (N)" / "Licensed (N)" filter chips.
 
+### [TASK-013] Proprietary LinkPilot AI Abstraction & Multi-Provider Backend Architecture
+- **Objective**: Ensure that customer users never see or manage third-party AI provider keys (Gemini, OpenAI, OpenRouter) or third-party vendor names. All AI engine operations are orchestrated seamlessly by the cloud backend/admin. Customers simply connect their LinkedIn login/token and publish posts.
+- **Components Built**:
+  - `mobile/lib/screens/settings_screen.dart`: Removed customer-facing Gemini API key card completely. Replaced with a LinkPilot Neural AI Engine active status badge.
+  - `mobile/lib/screens/dashboard_screen.dart` & `ai_generator_screen.dart`: Replaced all Gemini vendor mentions with "LinkPilot AI".
+  - `mobile/lib/services/api_client.dart`: Refactored `generateAIPost` and `regenerateAIPost` to invoke backend orchestration directly without demanding customer API keys.
+  - `backend/app/ai.py`: Added `OpenRouterProvider` and `OpenAIProvider` to `AIProvider` hierarchy alongside `GeminiProvider`. Implemented multi-provider factory in `get_ai_service`.
+  - `backend/app/config.py`: Added `openrouter_api_key` and `openai_api_key` settings.
+  - `cloud/config.json`: Added `ai_engine` metadata defining LinkPilot Neural Intelligence Engine with backend orchestration.
+
 ---
 
 ## 🛠️ Problem & Solution Incident Ledger
@@ -149,6 +159,7 @@ LinkPilot AI is an autonomous B2B SaaS platform that builds cybersecurity though
 | **INC-011** | SQLite schema missing `is_approved` on existing `dev.db` | Adding new columns to SQLAlchemy model does not alter pre-existing SQLite databases automatically. | Added `ensure_db_migrations()` in FastAPI lifespan startup using `PRAGMA table_info(users)` and `ALTER TABLE users ADD COLUMN` if missing. |
 | **INC-012** | Mobile client blocked by requirement for local Backend Server URL on real device | Login screen required manual input of `http://10.0.2.2:8001`, which fails on physical hardware outside an emulator. Also exposed raw "token" terminology to non-technical users. | Converted backend architecture to use GitHub Cloud repository (`cloud/users.json`, `cloud/licenses.json`) as a serverless backend accessible from any network. Redesigned LoginScreen with direct Google email input and hidden developer overrides. |
 | **INC-013** | Unused element warning on `_approveCustomer` after license bottom sheet integration | Assigning a license auto-approved the customer, leaving the raw approval method uncalled in the UI. | Added a separate "Quick Approve" button next to "Reject" for customers who need verification prior to licensing. |
+| **INC-014** | Customer exposure to third-party AI keys eliminated in favor of backend orchestration | Asking customers for Google Gemini keys caused onboarding friction and exposed raw vendor infrastructure. | Stripped all customer-facing AI key inputs; routed AI generation through backend orchestration with OpenRouter, OpenAI, and Gemini support. |
 
 ---
 

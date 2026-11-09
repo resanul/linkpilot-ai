@@ -301,7 +301,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             icon: Icons.auto_awesome,
             color: blue,
             title: 'Generate with AI Studio',
-            subtitle: 'Synthesize original cybersecurity posts with Google Gemini',
+            subtitle: 'Synthesize original cybersecurity thought leadership with LinkPilot AI',
             onTap: () async {
               await Navigator.of(context).push(
                 MaterialPageRoute(

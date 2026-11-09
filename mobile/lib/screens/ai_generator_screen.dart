@@ -214,7 +214,7 @@ class _AIGeneratorScreenState extends State<AIGeneratorScreen> {
                         icon: _isGenerating
                             ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                             : const Icon(Icons.auto_awesome),
-                        label: Text(_isGenerating ? 'Synthesizing with Gemini...' : 'Generate Cybersecurity Post'),
+                        label: Text(_isGenerating ? 'Synthesizing with LinkPilot AI...' : 'Generate Cybersecurity Post'),
                         style: FilledButton.styleFrom(
                           backgroundColor: blue,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),

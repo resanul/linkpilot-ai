@@ -6,6 +6,12 @@
     "admin@linkpilot.ai"
   ],
   "master_admin_pin": "889900",
+  "ai_engine": {
+    "managed_by_backend": true,
+    "display_name": "LinkPilot Neural Intelligence Engine",
+    "active_provider": "backend_managed",
+    "supported_providers": ["openrouter", "openai", "gemini"]
+  },
   "github_repo": "resanul/linkpilot-ai",
   "raw_base_url": "https://raw.githubusercontent.com/resanul/linkpilot-ai/main/cloud",
   "api_base_url": "https://api.github.com/repos/resanul/linkpilot-ai",

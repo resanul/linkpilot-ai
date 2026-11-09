@@ -267,52 +267,25 @@ class ApiClient {
   }
 
   Future<String> generateAIPost(String topic) async {
-    final customApiKey = await _storage.getGeminiApiKey();
-    // 1. If user entered Gemini Key, call Gemini API directly from device (Serverless)!
-    if (customApiKey != null && customApiKey.trim().isNotEmpty) {
-      try {
-        return await ProjectEngine.instance.generateGeminiDirect(
-          topic: topic,
-          apiKey: customApiKey.trim(),
-        );
-      } catch (e) {
-        // Fall through to try backend or template
-      }
-    }
-
-    // 2. Try backend API if reachable
+    // 1. Call centralized backend/cloud AI engine (Gemini / OpenAI / OpenRouter managed by backend)
     try {
       final uri = _uri('/ai/generate');
       final headers = await _headers();
       final Map<String, dynamic> body = {'topic': topic};
-      if (customApiKey != null && customApiKey.isNotEmpty) {
-        body['gemini_api_key'] = customApiKey;
-      }
       final res = await http.post(
         uri,
         headers: headers,
         body: jsonEncode(body),
-      ).timeout(const Duration(seconds: 8));
+      ).timeout(const Duration(seconds: 12));
       final data = await _handleResponse(res) as Map<String, dynamic>;
       return data['content'] as String;
     } catch (_) {
-      // 3. High quality built-in cybersecurity post generator
+      // 2. High-quality built-in cybersecurity post generator (Offline fallback)
       return ProjectEngine.instance.generateTemplatePost(topic);
     }
   }
 
   Future<String> regenerateAIPost(String originalBody, String topic, [String? instructions]) async {
-    final customApiKey = await _storage.getGeminiApiKey();
-    if (customApiKey != null && customApiKey.trim().isNotEmpty) {
-      try {
-        final promptTopic = instructions != null ? '$topic (Revision: $instructions)' : topic;
-        return await ProjectEngine.instance.generateGeminiDirect(
-          topic: promptTopic,
-          apiKey: customApiKey.trim(),
-        );
-      } catch (_) {}
-    }
-
     try {
       final uri = _uri('/ai/regenerate');
       final headers = await _headers();
@@ -321,14 +294,11 @@ class ApiClient {
         'topic': topic,
         'instructions': instructions,
       };
-      if (customApiKey != null && customApiKey.isNotEmpty) {
-        body['gemini_api_key'] = customApiKey;
-      }
       final res = await http.post(
         uri,
         headers: headers,
         body: jsonEncode(body),
-      ).timeout(const Duration(seconds: 8));
+      ).timeout(const Duration(seconds: 12));
       final data = await _handleResponse(res) as Map<String, dynamic>;
       return data['content'] as String;
     } catch (_) {

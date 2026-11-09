@@ -115,13 +115,140 @@ class GeminiProvider(AIProvider):
         )
         return await self._call_gemini_with_retry(prompt)
 
+class OpenRouterProvider(AIProvider):
+    def __init__(self, api_key: str, model: str = "anthropic/claude-3.5-sonnet"):
+        self.api_key = api_key
+        self.model = model or "anthropic/claude-3.5-sonnet"
+        self.base_url = "https://openrouter.ai/api/v1/chat/completions"
+
+    async def _call_openrouter(self, prompt: str) -> str:
+        if not self.api_key:
+            raise HTTPException(503, "OpenRouter API key is not configured on the backend")
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "HTTP-Referer": "https://linkpilot.ai",
+            "X-Title": "LinkPilot AI",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.7,
+            "max_tokens": 800
+        }
+        async with httpx.AsyncClient(timeout=40.0) as client:
+            resp = await client.post(self.base_url, headers=headers, json=payload)
+            if resp.status_code == 200:
+                data = resp.json()
+                choices = data.get("choices", [])
+                if choices:
+                    return choices[0].get("message", {}).get("content", "").strip()
+            raise HTTPException(502, f"OpenRouter API error (HTTP {resp.status_code}): {resp.text}")
+
+    async def generate_post(self, topic: str = "cybersecurity") -> str:
+        prompt = (
+            "You are a Senior DevSecOps and Cybersecurity Specialist creating an engaging, educational "
+            "LinkedIn post in English.\n"
+            f"Topic: {topic[:200]}\n"
+            "Requirements:\n"
+            "- Professional, authentic, human tone (avoid generic AI cliches).\n"
+            "- Length: 130 to 200 words.\n"
+            "- Practical industry insights covering architecture, defense, or operations.\n"
+            "- No fabricated statistics, fake CVEs, or false vendor claims.\n"
+            "- Include 3 to 5 relevant technical hashtags (e.g., #CyberSecurity #InfoSec #SOC).\n"
+            "- Return strictly the final post content without conversational filler."
+        )
+        return await self._call_openrouter(prompt)
+
+    async def regenerate_post(self, original_body: str, topic: str, instructions: str | None = None) -> str:
+        extra_inst = f"\nSpecific adjustment instructions: {instructions}" if instructions else ""
+        prompt = (
+            "You are a Senior DevSecOps and Cybersecurity Specialist revising a LinkedIn post.\n"
+            f"Original Post:\n\"\"\"{original_body[:2000]}\"\"\"\n"
+            f"Domain/Topic: {topic[:200]}{extra_inst}\n"
+            "Requirements:\n"
+            "- Rewrite and improve the post for clarity, punchiness, and professional depth.\n"
+            "- Keep length between 130 and 200 words.\n"
+            "- Maintain strict cybersecurity technical accuracy.\n"
+            "- Keep 3 to 5 relevant hashtags at the end.\n"
+            "- Return only the refined post text."
+        )
+        return await self._call_openrouter(prompt)
+
+class OpenAIProvider(AIProvider):
+    def __init__(self, api_key: str, model: str = "gpt-4o-mini"):
+        self.api_key = api_key
+        self.model = model or "gpt-4o-mini"
+        self.base_url = "https://api.openai.com/v1/chat/completions"
+
+    async def _call_openai(self, prompt: str) -> str:
+        if not self.api_key:
+            raise HTTPException(503, "OpenAI API key is not configured on the backend")
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.7,
+            "max_tokens": 800
+        }
+        async with httpx.AsyncClient(timeout=40.0) as client:
+            resp = await client.post(self.base_url, headers=headers, json=payload)
+            if resp.status_code == 200:
+                data = resp.json()
+                choices = data.get("choices", [])
+                if choices:
+                    return choices[0].get("message", {}).get("content", "").strip()
+            raise HTTPException(502, f"OpenAI API error (HTTP {resp.status_code}): {resp.text}")
+
+    async def generate_post(self, topic: str = "cybersecurity") -> str:
+        prompt = (
+            "You are a Senior DevSecOps and Cybersecurity Specialist creating an engaging, educational "
+            "LinkedIn post in English.\n"
+            f"Topic: {topic[:200]}\n"
+            "Requirements:\n"
+            "- Professional, authentic, human tone (avoid generic AI cliches).\n"
+            "- Length: 130 to 200 words.\n"
+            "- Practical industry insights covering architecture, defense, or operations.\n"
+            "- No fabricated statistics, fake CVEs, or false vendor claims.\n"
+            "- Include 3 to 5 relevant technical hashtags (e.g., #CyberSecurity #InfoSec #SOC).\n"
+            "- Return strictly the final post content without conversational filler."
+        )
+        return await self._call_openai(prompt)
+
+    async def regenerate_post(self, original_body: str, topic: str, instructions: str | None = None) -> str:
+        extra_inst = f"\nSpecific adjustment instructions: {instructions}" if instructions else ""
+        prompt = (
+            "You are a Senior DevSecOps and Cybersecurity Specialist revising a LinkedIn post.\n"
+            f"Original Post:\n\"\"\"{original_body[:2000]}\"\"\"\n"
+            f"Domain/Topic: {topic[:200]}{extra_inst}\n"
+            "Requirements:\n"
+            "- Rewrite and improve the post for clarity, punchiness, and professional depth.\n"
+            "- Keep length between 130 and 200 words.\n"
+            "- Maintain strict cybersecurity technical accuracy.\n"
+            "- Keep 3 to 5 relevant hashtags at the end.\n"
+            "- Return only the refined post text."
+        )
+        return await self._call_openai(prompt)
+
 def get_ai_service(custom_api_key: str | None = None) -> AIProvider:
     provider = settings.ai_provider.lower().strip()
-    api_key = custom_api_key or settings.ai_api_key
-    if provider == "gemini":
-        return GeminiProvider(api_key=api_key, model=settings.ai_model)
+    if provider == "openrouter":
+        key = custom_api_key or settings.openrouter_api_key or settings.ai_api_key
+        return OpenRouterProvider(api_key=key, model=settings.ai_model or "anthropic/claude-3.5-sonnet")
+    elif provider == "openai":
+        key = custom_api_key or settings.openai_api_key or settings.ai_api_key
+        return OpenAIProvider(api_key=key, model=settings.ai_model or "gpt-4o-mini")
+    elif provider == "gemini":
+        key = custom_api_key or settings.ai_api_key
+        return GeminiProvider(api_key=key, model=settings.ai_model or "gemini-1.5-flash")
     else:
-        raise HTTPException(503, f"AI provider '{settings.ai_provider}' is not supported")
+        key = custom_api_key or settings.ai_api_key
+        return GeminiProvider(api_key=key, model="gemini-1.5-flash")
 
 async def generate_cybersecurity_post(topic: str = "cybersecurity", custom_api_key: str | None = None) -> str:
     service = get_ai_service(custom_api_key)
