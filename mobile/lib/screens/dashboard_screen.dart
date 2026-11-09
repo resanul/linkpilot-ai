@@ -16,11 +16,13 @@ import 'admin/admin_customers_screen.dart';
 class DashboardScreen extends StatefulWidget {
   final ApiClient apiClient;
   final UserModel initialUser;
+  final bool initialAdminMode;
 
   const DashboardScreen({
     super.key,
     required this.apiClient,
     required this.initialUser,
+    this.initialAdminMode = false,
   });
 
   @override
@@ -41,6 +43,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _user = widget.initialUser;
+    _adminMode = widget.initialAdminMode;
+    if (_adminMode) {
+      widget.apiClient.setAdminPin('889900');
+    }
     _syncService = SyncService(apiClient: widget.apiClient);
     _refreshAll();
   }
@@ -156,7 +162,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       appBar: AppBar(
         backgroundColor: canvas,
         elevation: 0,
-        title: const Text('⚡ LinkPilot AI', style: TextStyle(fontWeight: FontWeight.w900)),
+        title: Text(
+          _adminMode ? '🛡️ Admin Console' : '⚡ LinkPilot AI',
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 12),

@@ -14,16 +14,20 @@ def verify_google_id_token(authorization: str | None = Header(default=None)) -> 
         raise HTTPException(401, "Empty bearer token")
 
     # Safe test hook for automated test suites and local integration testing
-    if settings.app_env.lower() in {"test", "development", "dev"} and token.startswith("test-token-"):
-        # Format: test-token-user@example.com
-        parts = token.split("-", 2)
-        email = parts[2] if len(parts) > 2 else "test@example.com"
-        return {
-            "sub": f"google-sub-{hashlib.sha256(email.encode()).hexdigest()[:16]}",
-            "email": email,
-            "email_verified": True,
-            "iss": "https://accounts.google.com"
-        }
+    if settings.app_env.lower() in {"test", "development", "dev"}:
+        if token.startswith("test-token-") or ("@" in token and not token.startswith("ey")):
+            if token.startswith("test-token-"):
+                parts = token.split("-", 2)
+                email = parts[2] if len(parts) > 2 else "test@example.com"
+            else:
+                email = token.strip()
+            email = email.lower()
+            return {
+                "sub": f"google-sub-{hashlib.sha256(email.encode()).hexdigest()[:16]}",
+                "email": email,
+                "email_verified": True,
+                "iss": "https://accounts.google.com"
+            }
 
     if not settings.google_client_id:
         raise HTTPException(503, "Google OAuth is not configured")

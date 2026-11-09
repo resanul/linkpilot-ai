@@ -51,6 +51,41 @@ class UserModel {
     );
   }
 
+  factory UserModel.adminUser({
+    String email = 'admin@linkpilot.ai',
+  }) {
+    return UserModel(
+      id: 'admin-master',
+      email: email,
+      role: 'super_admin',
+      adminRole: 'super_admin',
+      hasActiveLicense: true,
+      licensePlan: 'Enterprise',
+      licenseCycle: 'lifetime',
+      daysRemaining: null,
+      linkedinConnected: false,
+      createdAt: DateTime.now(),
+    );
+  }
+
+  factory UserModel.customerUser({
+    String email = 'customer@linkpilot.ai',
+    bool hasLicense = false,
+  }) {
+    return UserModel(
+      id: 'customer-client',
+      email: email,
+      role: 'user',
+      adminRole: null,
+      hasActiveLicense: hasLicense,
+      licensePlan: hasLicense ? 'Standard' : null,
+      licenseCycle: hasLicense ? '30_days' : null,
+      daysRemaining: hasLicense ? 30 : null,
+      linkedinConnected: false,
+      createdAt: DateTime.now(),
+    );
+  }
+
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
       id: json['id'] as String,

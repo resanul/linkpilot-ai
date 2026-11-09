@@ -81,7 +81,29 @@ def health():
         "environment": settings.app_env
     }
 
-def current_user(claims: dict = Depends(verify_google_id_token), db: Session = Depends(get_db)) -> User:
+def _super_admin_emails() -> set[str]:
+    return {x.strip().lower() for x in settings.admin_emails.split(",") if x.strip()}
+
+def resolve_actor(
+    request: Request,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db)
+) -> User:
+    admin_pin = request.headers.get("X-Admin-Pin", "").strip()
+    if admin_pin and admin_pin == settings.master_admin_pin:
+        user = db.query(User).filter_by(email="admin@linkpilot.ai").first()
+        if not user:
+            user = User(id=str(uuid4()), google_sub="master-admin-system", email="admin@linkpilot.ai", role="super_admin")
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        setattr(user, "admin_role", "super_admin")
+        return user
+
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(401, "Missing Google ID token or Master Admin PIN")
+
+    claims = verify_google_id_token(authorization)
     sub = claims.get("sub")
     if not sub:
         raise HTTPException(401, "Google subject missing")
@@ -98,7 +120,12 @@ def current_user(claims: dict = Depends(verify_google_id_token), db: Session = D
         db.commit()
     return user
 
+def current_user(user: User = Depends(resolve_actor)) -> User:
+    return user
+
 def require_active_license(user: User = Depends(current_user), db: Session = Depends(get_db)) -> User:
+    if getattr(user, "admin_role", None) == "super_admin" or (user.email or "").lower().strip() in _super_admin_emails():
+        return user
     rows = db.query(License).filter_by(user_id=user.id, active=True).all()
     now = datetime.now(timezone.utc)
     for row in rows:
@@ -109,57 +136,17 @@ def require_active_license(user: User = Depends(current_user), db: Session = Dep
             return user
     raise HTTPException(403, "An active LinkPilot license is required")
 
-def _super_admin_emails() -> set[str]:
-    return {x.strip().lower() for x in settings.admin_emails.split(",") if x.strip()}
-
-def optional_user(authorization: str | None = Header(default=None), db: Session = Depends(get_db)) -> User | None:
-    if not authorization or not authorization.startswith("Bearer "):
-        return None
-    try:
-        claims = verify_google_id_token(authorization)
-        sub = claims.get("sub")
-        if not sub:
-            return None
-        email = claims.get("email", "").strip().lower()
-        user = db.query(User).filter_by(google_sub=sub).first()
-        if not user:
-            user = User(id=str(uuid4()), google_sub=sub, email=email)
-            db.add(user)
-            db.commit()
-            db.refresh(user)
+def current_admin(user: User = Depends(resolve_actor), db: Session = Depends(get_db)) -> User:
+    if getattr(user, "admin_role", None) == "super_admin":
         return user
-    except Exception:
-        return None
-
-def current_admin(
-    request: Request,
-    opt_user: User | None = Depends(optional_user),
-    db: Session = Depends(get_db)
-) -> User:
-    admin_pin = request.headers.get("X-Admin-Pin", "").strip()
-    if admin_pin and admin_pin == settings.master_admin_pin:
-        user = opt_user
-        if not user:
-            user = db.query(User).filter_by(email="admin@linkpilot.ai").first()
-            if not user:
-                user = User(id=str(uuid4()), google_sub="master-admin-system", email="admin@linkpilot.ai")
-                db.add(user)
-                db.commit()
-                db.refresh(user)
+    email = (user.email or "").lower().strip()
+    if email in _super_admin_emails():
         setattr(user, "admin_role", "super_admin")
         return user
-
-    if not opt_user:
-        raise HTTPException(401, "Google authentication or Master Admin PIN required")
-
-    email = (opt_user.email or "").lower().strip()
-    if email in _super_admin_emails():
-        setattr(opt_user, "admin_role", "super_admin")
-        return opt_user
     staff = db.query(StaffAdmin).filter_by(email=email, active=True).first()
     if staff:
-        setattr(opt_user, "admin_role", "staff")
-        return opt_user
+        setattr(user, "admin_role", "staff")
+        return user
     raise HTTPException(403, "Admin access required. Provide valid admin credentials or Master Admin PIN.")
 
 def current_super_admin(admin: User = Depends(current_admin)) -> User:
@@ -172,10 +159,10 @@ def current_super_admin(admin: User = Depends(current_admin)) -> User:
 @app.get("/user/profile", response_model=UserProfileOut)
 def get_user_profile(user: User = Depends(current_user), db: Session = Depends(get_db)):
     email = (user.email or "").lower().strip()
-    admin_role = None
+    admin_role = getattr(user, "admin_role", None)
     if email in _super_admin_emails():
         admin_role = "super_admin"
-    elif db.query(StaffAdmin).filter_by(email=email, active=True).first():
+    elif not admin_role and db.query(StaffAdmin).filter_by(email=email, active=True).first():
         admin_role = "staff"
 
     now = datetime.now(timezone.utc)
@@ -183,7 +170,12 @@ def get_user_profile(user: User = Depends(current_user), db: Session = Depends(g
     has_active_lic = False
     plan, cycle, expires_at = None, None, None
     days_remaining = None
-    if lic:
+    if admin_role == "super_admin":
+        has_active_lic = True
+        plan = "enterprise"
+        cycle = "lifetime"
+        days_remaining = None
+    elif lic:
         exp = lic.expires_at
         if exp and exp.tzinfo is None:
             exp = exp.replace(tzinfo=timezone.utc)
