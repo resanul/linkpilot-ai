@@ -5,6 +5,7 @@ import '../models/user_model.dart';
 import '../models/license_model.dart';
 import 'secure_storage_service.dart';
 import 'project_engine.dart';
+import 'github_cloud_service.dart';
 
 class ApiException implements Exception {
   final int statusCode;
@@ -94,30 +95,30 @@ class ApiClient {
     try {
       final uri = _uri('/user/profile');
       final headers = await _headers();
-      final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 4));
+      final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 3));
       final data = await _handleResponse(res);
       return UserModel.fromJson(data as Map<String, dynamic>);
     } catch (_) {
-      // Serverless Project Mode fallback
+      // GitHub Cloud backend fallback
       final email = await _storage.getUserEmail() ?? 'resanul@gmail.com';
-      final liToken = await _storage.getLinkedInToken();
-      return UserModel.projectUser(
-        email: email,
-        linkedinConnected: liToken != null && liToken.isNotEmpty,
-        linkedinProfileName: liToken != null ? 'Connected Profile' : null,
-      );
+      return await GitHubCloudService.instance.getUserProfile(email);
     }
   }
 
   Future<Map<String, dynamic>> activateLicense(String licenseKey) async {
-    final uri = _uri('/license/activate');
-    final headers = await _headers();
-    final res = await http.post(
-      uri,
-      headers: headers,
-      body: jsonEncode({'license_key': licenseKey.trim()}),
-    ).timeout(const Duration(seconds: 15));
-    return await _handleResponse(res) as Map<String, dynamic>;
+    try {
+      final uri = _uri('/license/activate');
+      final headers = await _headers();
+      final res = await http.post(
+        uri,
+        headers: headers,
+        body: jsonEncode({'license_key': licenseKey.trim()}),
+      ).timeout(const Duration(seconds: 4));
+      return await _handleResponse(res) as Map<String, dynamic>;
+    } catch (_) {
+      final email = await _storage.getUserEmail() ?? 'resanul@gmail.com';
+      return await GitHubCloudService.instance.activateLicense(email, licenseKey);
+    }
   }
 
   Future<Map<String, dynamic>> getLicenseStatus() async {
@@ -362,11 +363,25 @@ class ApiClient {
   }
 
   Future<List<LicenseModel>> getAdminLicenses() async {
-    final uri = _uri('/admin/licenses');
-    final headers = await _headers();
-    final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 20));
-    final list = await _handleResponse(res) as List<dynamic>;
-    return list.map((e) => LicenseModel.fromJson(e as Map<String, dynamic>)).toList();
+    try {
+      final uri = _uri('/admin/licenses');
+      final headers = await _headers();
+      final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 4));
+      final list = await _handleResponse(res) as List<dynamic>;
+      return list.map((e) => LicenseModel.fromJson(e as Map<String, dynamic>)).toList();
+    } catch (_) {
+      final rawList = await GitHubCloudService.instance.fetchLicenses();
+      return rawList.map((e) => LicenseModel(
+        id: e['id'] as String? ?? 'lic-${DateTime.now().millisecondsSinceEpoch}',
+        plan: e['plan'] as String? ?? 'Standard',
+        billingCycle: e['billing_cycle'] as String? ?? '30_days',
+        active: e['is_active'] as bool? ?? true,
+        assigned: e['assigned_to'] != null,
+        userId: e['assigned_to'] as String?,
+        maxDevices: e['max_devices'] as int? ?? 1,
+        createdAt: e['created_at'] != null ? (DateTime.tryParse(e['created_at'] as String) ?? DateTime.now()) : DateTime.now(),
+      )).toList();
+    }
   }
 
   Future<Map<String, dynamic>> createAdminLicense(String plan, String billingCycle, {int? days}) async {
@@ -388,25 +403,39 @@ class ApiClient {
   }
 
   Future<List<Map<String, dynamic>>> getAdminCustomers() async {
-    final uri = _uri('/admin/customers');
-    final headers = await _headers();
-    final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 20));
-    final list = await _handleResponse(res) as List<dynamic>;
-    return list.map((e) => e as Map<String, dynamic>).toList();
+    try {
+      final uri = _uri('/admin/customers');
+      final headers = await _headers();
+      final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 4));
+      final list = await _handleResponse(res) as List<dynamic>;
+      return list.map((e) => e as Map<String, dynamic>).toList();
+    } catch (_) {
+      return await GitHubCloudService.instance.fetchUsers();
+    }
   }
 
   Future<Map<String, dynamic>> approveAdminCustomer(String userId) async {
-    final uri = _uri('/admin/customers/$userId/approve');
-    final headers = await _headers();
-    final res = await http.post(uri, headers: headers).timeout(const Duration(seconds: 15));
-    return await _handleResponse(res) as Map<String, dynamic>;
+    try {
+      final uri = _uri('/admin/customers/$userId/approve');
+      final headers = await _headers();
+      final res = await http.post(uri, headers: headers).timeout(const Duration(seconds: 4));
+      return await _handleResponse(res) as Map<String, dynamic>;
+    } catch (_) {
+      await GitHubCloudService.instance.adminApproveUser(userId);
+      return {'status': 'approved', 'user_id': userId};
+    }
   }
 
   Future<Map<String, dynamic>> rejectAdminCustomer(String userId) async {
-    final uri = _uri('/admin/customers/$userId/reject');
-    final headers = await _headers();
-    final res = await http.post(uri, headers: headers).timeout(const Duration(seconds: 15));
-    return await _handleResponse(res) as Map<String, dynamic>;
+    try {
+      final uri = _uri('/admin/customers/$userId/reject');
+      final headers = await _headers();
+      final res = await http.post(uri, headers: headers).timeout(const Duration(seconds: 4));
+      return await _handleResponse(res) as Map<String, dynamic>;
+    } catch (_) {
+      await GitHubCloudService.instance.adminRejectUser(userId);
+      return {'status': 'rejected', 'user_id': userId};
+    }
   }
 
   Future<List<Map<String, dynamic>>> getAdminStaff() async {

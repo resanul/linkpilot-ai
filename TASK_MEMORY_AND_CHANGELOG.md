@@ -113,6 +113,15 @@ LinkPilot AI is an autonomous B2B SaaS platform that builds cybersecurity though
   - `mobile/lib/screens/admin/admin_customers_screen.dart`: Added filter pills (`All`, `Pending Approval (N)`, `Approved`), pending approval badges, and direct **[ ✅ Approve Access ]** and **[ ❌ Reject ]** buttons.
   - `mobile/test/widget_test.dart`: Added widget test for `PendingApprovalScreen`.
 
+### [TASK-011] GitHub Cloud Serverless Backend & Google Sign-In Streamlining
+- **Objective**: Eliminate confusing developer "tokens" (`test-token-...`, "Google Account Email / ID Token") from user-facing UI. Replace with clean, standard "Sign In with Google" and "Sign Up with Google (New Account)" workflows accepting user's Gmail address directly. Eliminate the mandatory "Backend Server URL" input from the mobile login screen so mobile users outside localhost don't get stuck. Deploy GitHub Cloud backend architecture using repository `resanul/linkpilot-ai` (`cloud/users.json`, `cloud/licenses.json`, `cloud/config.json`) as a serverless remote registry accessible across any Wi-Fi or mobile data network worldwide without requiring a local running backend server.
+- **Components Built**:
+  - `cloud/users.json`, `cloud/licenses.json`, `cloud/config.json`: Live remote cloud registry on GitHub main branch.
+  - `mobile/lib/services/github_cloud_service.dart`: High-performance GitHub raw cloud client with local SQLite caching, Google account registration, approval verification, and license activation.
+  - `mobile/lib/services/api_client.dart`: Integrated automatic transparent fallback to `GitHubCloudService` for `getUserProfile`, `activateLicense`, `getAdminCustomers`, `approveAdminCustomer`, `rejectAdminCustomer`, and `getAdminLicenses`.
+  - `mobile/lib/screens/login_screen.dart`: Redesigned UI with dedicated "Sign In with Google" and "Sign Up with Google" flows, live "Backend Cloud: GitHub" status badge, zero token jargon, and collapsed developer settings.
+  - `mobile/test/widget_test.dart`: Updated widget tests (14/14 tests passing).
+
 ---
 
 ## 🛠️ Problem & Solution Incident Ledger
@@ -130,6 +139,7 @@ LinkPilot AI is an autonomous B2B SaaS platform that builds cybersecurity though
 | **INC-009** | Login screen was never visible on app launch | `splash_screen.dart` had an auto-login bypass that loaded `DashboardScreen` immediately upon launch. | Rewrote `splash_screen.dart` `_checkSession` to navigate directly to `LoginScreen`. |
 | **INC-010** | User Dashboard leaked "Admin Portal" toggle button | `dashboard_screen.dart` combined both user and admin views into a single screen with an AppBar switch button. | Decoupled into `DashboardScreen` (pure User) and `AdminPortalScreen` (pure Admin). Removed all admin buttons from the User view. |
 | **INC-011** | SQLite schema missing `is_approved` on existing `dev.db` | Adding new columns to SQLAlchemy model does not alter pre-existing SQLite databases automatically. | Added `ensure_db_migrations()` in FastAPI lifespan startup using `PRAGMA table_info(users)` and `ALTER TABLE users ADD COLUMN` if missing. |
+| **INC-012** | Mobile client blocked by requirement for local Backend Server URL on real device | Login screen required manual input of `http://10.0.2.2:8001`, which fails on physical hardware outside an emulator. Also exposed raw "token" terminology to non-technical users. | Converted backend architecture to use GitHub Cloud repository (`cloud/users.json`, `cloud/licenses.json`) as a serverless backend accessible from any network. Redesigned LoginScreen with direct Google email input and hidden developer overrides. |
 
 ---
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/user_model.dart';
 import '../services/secure_storage_service.dart';
 import '../services/api_client.dart';
+import '../services/github_cloud_service.dart';
 import 'license_activation_screen.dart';
 import 'pending_approval_screen.dart';
 import 'dashboard_screen.dart';
@@ -19,37 +20,90 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   LoginTab _currentTab = LoginTab.user;
-  final TextEditingController _tokenController = TextEditingController();
-  final TextEditingController _apiUrlController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
   final TextEditingController _adminPinController = TextEditingController(text: '889900');
-  final TextEditingController _adminEmailController = TextEditingController(text: 'admin@linkpilot.ai');
+  final TextEditingController _apiUrlController = TextEditingController();
   bool _obscureAdminPin = true;
   bool _isLoading = false;
   String? _errorMessage;
+  bool _showAdvancedSettings = false;
 
   @override
   void initState() {
     super.initState();
-    _loadCurrentApiUrl();
+    _loadSavedSettings();
   }
 
-  Future<void> _loadCurrentApiUrl() async {
+  Future<void> _loadSavedSettings() async {
+    final savedEmail = await SecureStorageService.instance.getUserEmail();
+    if (savedEmail != null && savedEmail.isNotEmpty && _emailController.text.isEmpty) {
+      _emailController.text = savedEmail;
+    }
     final url = await widget.apiClient.getBaseUrl();
     _apiUrlController.text = url;
   }
 
-  Future<void> _enterProjectMode() async {
-    final user = UserModel.projectUser();
-    await SecureStorageService.instance.saveUserEmail('resanul@gmail.com');
-    if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => DashboardScreen(
-          apiClient: widget.apiClient,
-          initialUser: user,
-        ),
-      ),
-    );
+  Future<void> _handleGoogleAuth({required bool isSignUp}) async {
+    final email = _emailController.text.trim().toLowerCase();
+    if (email.isEmpty || !email.contains('@') || !email.contains('.')) {
+      setState(() => _errorMessage = 'Please enter a valid Google (Gmail) address.');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // 1. Authenticate or register with GitHub Cloud Backend
+      final UserModel user = await GitHubCloudService.instance.registerOrLoginGoogleUser(email);
+
+      await SecureStorageService.instance.saveUserEmail(user.email);
+      await SecureStorageService.instance.saveAuthToken('token-${user.email}');
+      widget.apiClient.setAdminPin(null);
+
+      if (!mounted) return;
+
+      if (user.isAdmin) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => AdminPortalScreen(apiClient: widget.apiClient),
+          ),
+        );
+      } else if (!user.isApproved) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => PendingApprovalScreen(
+              apiClient: widget.apiClient,
+              user: user,
+            ),
+          ),
+        );
+      } else if (!user.hasActiveLicense) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => LicenseActivationScreen(
+              apiClient: widget.apiClient,
+              user: user,
+            ),
+          ),
+        );
+      } else {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => DashboardScreen(
+              apiClient: widget.apiClient,
+              initialUser: user,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _errorMessage = 'Authentication failed: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _signInAsAdmin() async {
@@ -65,28 +119,18 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      if (_apiUrlController.text.trim().isNotEmpty) {
-        widget.apiClient.setBaseUrl(_apiUrlController.text.trim());
-      }
-
       if (pin != '889900' && pin != 'admin') {
         throw ApiException(403, 'Invalid Master Admin PIN. Access Denied.');
       }
 
       widget.apiClient.setAdminPin(pin);
-      final adminEmail = _adminEmailController.text.trim().isNotEmpty
-          ? _adminEmailController.text.trim()
-          : 'admin@linkpilot.ai';
-
-      await SecureStorageService.instance.saveUserEmail(adminEmail);
+      await SecureStorageService.instance.saveUserEmail('admin@linkpilot.ai');
 
       if (!mounted) return;
 
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) => AdminPortalScreen(
-            apiClient: widget.apiClient,
-          ),
+          builder: (_) => AdminPortalScreen(apiClient: widget.apiClient),
         ),
       );
     } on ApiException catch (e) {
@@ -98,83 +142,9 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _signInWithToken(String rawInput, {bool forceAdmin = false}) async {
-    final input = rawInput.trim();
-    if (input.isEmpty) {
-      setState(() => _errorMessage = 'Please enter your Google account email or ID token.');
-      return;
-    }
-
-    String token = input;
-    if (!token.startsWith('test-token-') && !token.startsWith('ey') && token.contains('@')) {
-      token = 'test-token-$token';
-    }
-
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
-    try {
-      if (_apiUrlController.text.trim().isNotEmpty) {
-        widget.apiClient.setBaseUrl(_apiUrlController.text.trim());
-      }
-
-      if (forceAdmin) {
-        widget.apiClient.setAdminPin('889900');
-      } else {
-        widget.apiClient.setAdminPin(null);
-      }
-
-      await SecureStorageService.instance.saveAuthToken(token.trim());
-      final user = await widget.apiClient.getUserProfile();
-      await SecureStorageService.instance.saveUserEmail(user.email);
-
-      if (!mounted) return;
-
-      if (!forceAdmin && !user.isAdmin && !user.isApproved) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => PendingApprovalScreen(
-              apiClient: widget.apiClient,
-              user: user,
-            ),
-          ),
-        );
-      } else if (!forceAdmin && !user.isAdmin && !user.hasActiveLicense) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => LicenseActivationScreen(
-              apiClient: widget.apiClient,
-              user: user,
-            ),
-          ),
-        );
-      } else if (forceAdmin || user.isAdmin) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => AdminPortalScreen(
-              apiClient: widget.apiClient,
-            ),
-          ),
-        );
-      } else {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => DashboardScreen(
-              apiClient: widget.apiClient,
-              initialUser: user,
-            ),
-          ),
-        );
-      }
-    } on ApiException catch (e) {
-      setState(() => _errorMessage = e.message);
-    } catch (e) {
-      setState(() => _errorMessage = 'Connection failed: ${e.toString()}');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+  Future<void> _enterOwnerMode() async {
+    _emailController.text = 'resanul@gmail.com';
+    await _handleGoogleAuth(isSignUp: false);
   }
 
   @override
@@ -183,10 +153,10 @@ class _LoginScreenState extends State<LoginScreen> {
     const ink = Color(0xFF14213D);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FA),
+      backgroundColor: const Color(0xFFF8FAFC),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -197,28 +167,38 @@ class _LoginScreenState extends State<LoginScreen> {
                   decoration: BoxDecoration(
                     color: ink,
                     borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: ink.withValues(alpha: 0.15),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
-                  child: const Icon(Icons.bolt, color: Colors.white, size: 38),
+                  child: const Icon(Icons.bolt, color: Colors.white, size: 40),
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
               const Center(
                 child: Text(
-                  'Welcome to LinkPilot AI',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: ink),
+                  'LinkPilot AI',
+                  style: TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.5,
+                    color: ink,
+                  ),
                 ),
               ),
               const SizedBox(height: 4),
-              Center(
+              const Center(
                 child: Text(
-                  _currentTab == LoginTab.user
-                      ? 'Autonomous Cybersecurity Post Automation for Clients'
-                      : 'Commercial License & Customer Administration Portal',
+                  'Autonomous Cybersecurity Thought Leadership',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.black54, fontSize: 13),
+                  style: TextStyle(color: Colors.black54, fontSize: 13),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
 
               // Tab Switcher: User Login vs Admin Login
               Container(
@@ -245,7 +225,11 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.person, size: 18, color: _currentTab == LoginTab.user ? Colors.white : Colors.black87),
+                              Icon(
+                                Icons.person_outline,
+                                size: 18,
+                                color: _currentTab == LoginTab.user ? Colors.white : Colors.black87,
+                              ),
                               const SizedBox(width: 8),
                               Text(
                                 'User Login',
@@ -276,10 +260,14 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.shield, size: 18, color: _currentTab == LoginTab.admin ? Colors.amber : Colors.black87),
+                              Icon(
+                                Icons.shield_outlined,
+                                size: 18,
+                                color: _currentTab == LoginTab.admin ? Colors.amber : Colors.black87,
+                              ),
                               const SizedBox(width: 8),
                               Text(
-                                'Admin Login',
+                                'Admin Console',
                                 style: TextStyle(
                                   color: _currentTab == LoginTab.admin ? Colors.white : Colors.black87,
                                   fontWeight: FontWeight.bold,
@@ -313,94 +301,121 @@ class _LoginScreenState extends State<LoginScreen> {
                       Expanded(
                         child: Text(
                           _errorMessage!,
-                          style: const TextStyle(color: Colors.red, fontSize: 12),
+                          style: const TextStyle(color: Colors.red, fontSize: 13),
                         ),
                       ),
                     ],
                   ),
                 ),
 
-              // ================= USER LOGIN FORM =================
+              // ================= USER GOOGLE LOGIN =================
               if (_currentTab == LoginTab.user) ...[
-                // Instant Project Mode button
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: FilledButton.icon(
-                    onPressed: _enterProjectMode,
-                    icon: const Icon(Icons.rocket_launch, color: Colors.white, size: 20),
-                    label: const Text('Log In as User (Instant Project Mode)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF16A34A),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-
                 Card(
                   elevation: 0,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(18),
                     side: BorderSide(color: Colors.grey.shade200),
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(22),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: Colors.red.shade50,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  'G',
+                                  style: TextStyle(
+                                    color: Colors.red.shade700,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Continue with Google',
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                  ),
+                                  Text(
+                                    'Sign in or sign up with your Google account',
+                                    style: TextStyle(color: Colors.black54, fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
                         const Text(
-                          'Backend Server URL',
+                          'Google Account Email',
                           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                         ),
                         const SizedBox(height: 6),
                         TextField(
-                          controller: _apiUrlController,
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
                           decoration: InputDecoration(
-                            hintText: 'http://10.0.2.2:8001',
+                            hintText: 'e.g. yourname@gmail.com',
+                            prefixIcon: const Icon(Icons.mail_outline, size: 20),
                             filled: true,
                             fillColor: Colors.grey.shade50,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                           ),
                         ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Google Account Email / Token',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                        ),
-                        const SizedBox(height: 6),
-                        TextField(
-                          controller: _tokenController,
-                          decoration: InputDecoration(
-                            hintText: 'e.g. resanul@gmail.com or paste token',
-                            filled: true,
-                            fillColor: Colors.grey.shade50,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 20),
+
+                        // Sign In with Google Button
                         SizedBox(
-                          width: double.infinity,
-                          height: 48,
+                          height: 50,
                           child: FilledButton.icon(
-                            onPressed: _isLoading
-                                ? null
-                                : () => _signInWithToken(_tokenController.text, forceAdmin: false),
+                            onPressed: _isLoading ? null : () => _handleGoogleAuth(isSignUp: false),
                             icon: _isLoading
                                 ? const SizedBox(
                                     width: 18,
                                     height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                                   )
-                                : const Icon(Icons.login),
-                            label: Text(_isLoading ? 'Authenticating...' : 'Sign In with Google'),
+                                : const Icon(Icons.login_rounded),
+                            label: Text(
+                              _isLoading ? 'Verifying with Cloud...' : 'Sign In with Google',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
                             style: FilledButton.styleFrom(
                               backgroundColor: blue,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+
+                        // Sign Up with Google Button
+                        SizedBox(
+                          height: 48,
+                          child: OutlinedButton.icon(
+                            onPressed: _isLoading ? null : () => _handleGoogleAuth(isSignUp: true),
+                            icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+                            label: const Text(
+                              'Sign Up with Google (New Account)',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: blue,
+                              side: BorderSide(color: blue.withValues(alpha: 0.5)),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
                           ),
@@ -411,57 +426,56 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
 
                 const SizedBox(height: 20),
-                const Text(
-                  'QA / Integration Profiles',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.black54),
-                ),
-                const SizedBox(height: 8),
 
-                _QuickAuthButton(
-                  icon: Icons.shield,
-                  label: 'Sign in as Super Admin',
-                  email: 'superadmin@linkpilot.io',
-                  onTap: () => _signInWithToken('test-token-superadmin@linkpilot.io', forceAdmin: true),
-                ),
-                const SizedBox(height: 8),
-                _QuickAuthButton(
-                  icon: Icons.person,
-                  label: 'Sign in as Customer',
-                  email: 'customer1@example.com',
-                  onTap: () => _signInWithToken('test-token-customer1@example.com', forceAdmin: false),
+                // Quick Project Owner Sign In
+                OutlinedButton.icon(
+                  onPressed: _isLoading ? null : _enterOwnerMode,
+                  icon: const Icon(Icons.verified_user, color: Color(0xFF16A34A), size: 18),
+                  label: const Text(
+                    'Instant Sign In as Project Owner (resanul@gmail.com)',
+                    style: TextStyle(color: Color(0xFF16A34A), fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: Colors.green.shade200),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
                 ),
               ],
 
-              // ================= ADMIN LOGIN FORM =================
+              // ================= ADMIN CONSOLE TAB =================
               if (_currentTab == LoginTab.admin) ...[
                 Card(
                   elevation: 0,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(18),
                     side: BorderSide(color: Colors.grey.shade200),
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(22),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Row(
-                          children: const [
-                            Icon(Icons.shield, color: Colors.amber, size: 22),
-                            SizedBox(width: 8),
-                            Text(
-                              'Master Admin Credentials',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: ink),
+                          children: [
+                            const Icon(Icons.shield, color: Colors.amber, size: 28),
+                            const SizedBox(width: 12),
+                            const Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Master Administrator',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: ink),
+                                ),
+                                Text(
+                                  'Customer approval & license management',
+                                  style: TextStyle(color: Colors.black54, fontSize: 12),
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                        const SizedBox(height: 6),
-                        const Text(
-                          'Enter the Master PIN to access the license minting and customer administration console.',
-                          style: TextStyle(fontSize: 12, color: Colors.black54),
-                        ),
-                        const SizedBox(height: 16),
-
+                        const SizedBox(height: 20),
                         const Text(
                           'Master Admin Security PIN',
                           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
@@ -473,70 +487,32 @@ class _LoginScreenState extends State<LoginScreen> {
                           keyboardType: TextInputType.number,
                           decoration: InputDecoration(
                             hintText: 'Default PIN: 889900',
+                            prefixIcon: const Icon(Icons.lock_outline, size: 20),
                             filled: true,
                             fillColor: Colors.grey.shade50,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                             suffixIcon: IconButton(
                               icon: Icon(_obscureAdminPin ? Icons.visibility : Icons.visibility_off, size: 20),
                               onPressed: () => setState(() => _obscureAdminPin = !_obscureAdminPin),
                             ),
                           ),
                         ),
-
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Administrator Email (Optional)',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                        ),
-                        const SizedBox(height: 6),
-                        TextField(
-                          controller: _adminEmailController,
-                          decoration: InputDecoration(
-                            hintText: 'admin@linkpilot.ai',
-                            filled: true,
-                            fillColor: Colors.grey.shade50,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          ),
-                        ),
-
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Backend Server URL',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                        ),
-                        const SizedBox(height: 6),
-                        TextField(
-                          controller: _apiUrlController,
-                          decoration: InputDecoration(
-                            hintText: 'http://10.0.2.2:8001',
-                            filled: true,
-                            fillColor: Colors.grey.shade50,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          ),
-                        ),
-
                         const SizedBox(height: 20),
                         SizedBox(
-                          width: double.infinity,
-                          height: 48,
+                          height: 50,
                           child: FilledButton.icon(
                             onPressed: _isLoading ? null : _signInAsAdmin,
                             icon: _isLoading
                                 ? const SizedBox(
                                     width: 18,
                                     height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                                   )
-                                : const Icon(Icons.admin_panel_settings, color: Colors.amber),
-                            label: Text(
-                              _isLoading ? 'Verifying Admin PIN...' : 'Unlock & Sign In as Admin',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                : const Icon(Icons.admin_panel_settings_rounded),
+                            label: const Text(
+                              'Enter Admin Console',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                             ),
                             style: FilledButton.styleFrom(
                               backgroundColor: ink,
@@ -548,76 +524,88 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                 ),
+              ],
 
-                const SizedBox(height: 20),
-                const Text(
-                  'Quick Administrator Profiles',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.black54),
-                ),
-                const SizedBox(height: 8),
+              const SizedBox(height: 28),
 
-                _QuickAuthButton(
-                  icon: Icons.shield,
-                  label: 'Sign in as Super Admin',
-                  email: 'superadmin@linkpilot.io',
-                  onTap: () => _signInWithToken('test-token-superadmin@linkpilot.io', forceAdmin: true),
+              // Backend Cloud Status Footer
+              Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF10B981),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Backend Cloud: GitHub (resanul/linkpilot-ai)',
+                      style: TextStyle(fontSize: 12, color: Colors.black45, fontWeight: FontWeight.w500),
+                    ),
+                  ],
                 ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // Expandable Developer Settings (Hidden by default)
+              Center(
+                child: TextButton.icon(
+                  onPressed: () => setState(() => _showAdvancedSettings = !_showAdvancedSettings),
+                  icon: Icon(
+                    _showAdvancedSettings ? Icons.expand_less : Icons.settings_outlined,
+                    size: 16,
+                    color: Colors.black38,
+                  ),
+                  label: Text(
+                    _showAdvancedSettings ? 'Hide Developer Settings' : 'Advanced Developer Settings',
+                    style: const TextStyle(fontSize: 12, color: Colors.black45),
+                  ),
+                ),
+              ),
+
+              if (_showAdvancedSettings) ...[
                 const SizedBox(height: 8),
-                _QuickAuthButton(
-                  icon: Icons.badge,
-                  label: 'Sign in as Staff Admin',
-                  email: 'staff1@linkpilot.io',
-                  onTap: () => _signInWithToken('test-token-staff1@linkpilot.io', forceAdmin: true),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Custom API Server (Optional Override)',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
+                      const SizedBox(height: 4),
+                      TextField(
+                        controller: _apiUrlController,
+                        decoration: InputDecoration(
+                          hintText: 'http://10.0.2.2:8001',
+                          filled: true,
+                          fillColor: Colors.white,
+                          isDense: true,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onChanged: (val) {
+                          if (val.trim().isNotEmpty) {
+                            widget.apiClient.setBaseUrl(val.trim());
+                          }
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _QuickAuthButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String email;
-  final VoidCallback onTap;
-
-  const _QuickAuthButton({
-    required this.icon,
-    required this.label,
-    required this.email,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade200),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 20, color: const Color(0xFF2563EB)),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  Text(email, style: const TextStyle(color: Colors.black54, fontSize: 11)),
-                ],
-              ),
-            ),
-            const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.black38),
-          ],
         ),
       ),
     );

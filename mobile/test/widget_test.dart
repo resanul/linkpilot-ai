@@ -29,7 +29,7 @@ void main() {
     );
   });
 
-  testWidgets('LoginScreen renders Google Sign-In and QA buttons', (WidgetTester tester) async {
+  testWidgets('LoginScreen renders Google Sign-In and Admin Console options', (WidgetTester tester) async {
     final client = ApiClient(baseUrl: 'http://127.0.0.1:8000');
     await tester.pumpWidget(
       MaterialApp(
@@ -38,10 +38,10 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Welcome to LinkPilot AI'), findsOneWidget);
+    expect(find.text('LinkPilot AI'), findsOneWidget);
     expect(find.text('Sign In with Google'), findsOneWidget);
-    expect(find.text('Sign in as Super Admin'), findsOneWidget);
-    expect(find.text('Sign in as Customer'), findsOneWidget);
+    expect(find.text('Sign Up with Google (New Account)'), findsOneWidget);
+    expect(find.text('Admin Console'), findsOneWidget);
   });
 
   testWidgets('LicenseActivationScreen renders key input and guidance', (WidgetTester tester) async {
