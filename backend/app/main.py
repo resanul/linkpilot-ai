@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 from uuid import uuid4
 
-from fastapi import FastAPI, Depends, HTTPException, Request, Response
+from fastapi import FastAPI, Depends, HTTPException, Request, Response, Header
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -112,16 +112,55 @@ def require_active_license(user: User = Depends(current_user), db: Session = Dep
 def _super_admin_emails() -> set[str]:
     return {x.strip().lower() for x in settings.admin_emails.split(",") if x.strip()}
 
-def current_admin(user: User = Depends(current_user), db: Session = Depends(get_db)) -> User:
-    email = (user.email or "").lower().strip()
-    if email in _super_admin_emails():
+def optional_user(authorization: str | None = Header(default=None), db: Session = Depends(get_db)) -> User | None:
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    try:
+        claims = verify_google_id_token(authorization)
+        sub = claims.get("sub")
+        if not sub:
+            return None
+        email = claims.get("email", "").strip().lower()
+        user = db.query(User).filter_by(google_sub=sub).first()
+        if not user:
+            user = User(id=str(uuid4()), google_sub=sub, email=email)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        return user
+    except Exception:
+        return None
+
+def current_admin(
+    request: Request,
+    opt_user: User | None = Depends(optional_user),
+    db: Session = Depends(get_db)
+) -> User:
+    admin_pin = request.headers.get("X-Admin-Pin", "").strip()
+    if admin_pin and admin_pin == settings.master_admin_pin:
+        user = opt_user
+        if not user:
+            user = db.query(User).filter_by(email="admin@linkpilot.ai").first()
+            if not user:
+                user = User(id=str(uuid4()), google_sub="master-admin-system", email="admin@linkpilot.ai")
+                db.add(user)
+                db.commit()
+                db.refresh(user)
         setattr(user, "admin_role", "super_admin")
         return user
+
+    if not opt_user:
+        raise HTTPException(401, "Google authentication or Master Admin PIN required")
+
+    email = (opt_user.email or "").lower().strip()
+    if email in _super_admin_emails():
+        setattr(opt_user, "admin_role", "super_admin")
+        return opt_user
     staff = db.query(StaffAdmin).filter_by(email=email, active=True).first()
     if staff:
-        setattr(user, "admin_role", "staff")
-        return user
-    raise HTTPException(403, "Admin access required")
+        setattr(opt_user, "admin_role", "staff")
+        return opt_user
+    raise HTTPException(403, "Admin access required. Provide valid admin credentials or Master Admin PIN.")
 
 def current_super_admin(admin: User = Depends(current_admin)) -> User:
     if getattr(admin, "admin_role", "") != "super_admin":
@@ -143,6 +182,7 @@ def get_user_profile(user: User = Depends(current_user), db: Session = Depends(g
     lic = db.query(License).filter_by(user_id=user.id, active=True).order_by(License.created_at.desc()).first()
     has_active_lic = False
     plan, cycle, expires_at = None, None, None
+    days_remaining = None
     if lic:
         exp = lic.expires_at
         if exp and exp.tzinfo is None:
@@ -150,6 +190,9 @@ def get_user_profile(user: User = Depends(current_user), db: Session = Depends(g
         if not exp or exp > now:
             has_active_lic = True
             plan, cycle, expires_at = lic.plan, lic.billing_cycle, lic.expires_at
+            if exp:
+                diff = (exp - now).days + 1
+                days_remaining = max(0, diff)
 
     conn = db.query(LinkedInConnection).filter_by(user_id=user.id).first()
     linkedin_connected = False
@@ -170,6 +213,7 @@ def get_user_profile(user: User = Depends(current_user), db: Session = Depends(g
         license_plan=plan,
         license_cycle=cycle,
         license_expires_at=expires_at,
+        days_remaining=days_remaining,
         linkedin_connected=linkedin_connected,
         linkedin_profile_name=profile_name,
         created_at=user.created_at
@@ -183,21 +227,51 @@ def activate_license(request: Request, payload: LicenseActivate, user: User = De
     item = db.query(License).filter_by(key_hash=hash_license_key(payload.license_key), active=True).first()
     if not item:
         raise HTTPException(403, "Invalid or inactive license key")
-    if item.expires_at:
-        expiry = item.expires_at
-        if expiry.tzinfo is None:
-            expiry = expiry.replace(tzinfo=timezone.utc)
-        if expiry < datetime.now(timezone.utc):
-            raise HTTPException(403, "This license key has expired")
     if item.user_id and item.user_id != user.id:
         raise HTTPException(409, "License key is already assigned to another customer")
 
+    now = datetime.now(timezone.utc)
+
+    # Check pre-existing expiry if already set
+    if item.expires_at:
+        exp = item.expires_at if item.expires_at.tzinfo else item.expires_at.replace(tzinfo=timezone.utc)
+        if exp < now:
+            raise HTTPException(403, "This license key has expired")
+    elif item.activated_at is None:
+        duration_days = 30
+        if item.billing_cycle:
+            if item.billing_cycle == "yearly":
+                duration_days = 365
+            elif item.billing_cycle == "quarterly":
+                duration_days = 90
+            elif item.billing_cycle == "lifetime":
+                duration_days = None
+            elif "_days" in item.billing_cycle:
+                try:
+                    duration_days = int(item.billing_cycle.split("_")[0])
+                except Exception:
+                    duration_days = 30
+        if duration_days:
+            item.expires_at = now + timedelta(days=duration_days)
+        item.activated_at = now
+
     item.user_id = user.id
-    item.activated_at = datetime.now(timezone.utc)
     db.commit()
 
-    log_audit(db, user.id, user.email, "LICENSE_ACTIVATED", "license", item.id, f"Plan: {item.plan}, Cycle: {item.billing_cycle}")
-    return {"active": True, "license_id": item.id, "plan": item.plan, "billing_cycle": item.billing_cycle}
+    days_rem = None
+    if item.expires_at:
+        exp = item.expires_at if item.expires_at.tzinfo else item.expires_at.replace(tzinfo=timezone.utc)
+        days_rem = max(0, (exp - now).days + 1)
+
+    log_audit(db, user.id, user.email, "LICENSE_ACTIVATED", "license", item.id, f"Plan: {item.plan}, Days: {days_rem}")
+    return {
+        "active": True,
+        "license_id": item.id,
+        "plan": item.plan,
+        "billing_cycle": item.billing_cycle,
+        "days_remaining": days_rem,
+        "expires_at": item.expires_at
+    }
 
 @app.get("/license/status")
 def license_status(user: User = Depends(current_user), db: Session = Depends(get_db)):
@@ -557,24 +631,40 @@ def admin_list_licenses(admin: User = Depends(current_admin), db: Session = Depe
 
 @app.post("/admin/licenses")
 def admin_create_license(
-    plan: str = "standard",
+    plan: str = "enterprise",
     billing_cycle: str = "monthly",
+    days: int | None = None,
     admin: User = Depends(current_admin),
     db: Session = Depends(get_db)
 ):
-    if plan not in {"standard", "pro", "business"}:
-        raise HTTPException(400, "Unsupported plan (must be standard, pro, or business)")
-    if billing_cycle not in {"monthly", "yearly", "lifetime"}:
-        raise HTTPException(400, "Unsupported billing cycle (must be monthly, yearly, or lifetime)")
+    plan_clean = plan.lower().strip()
+    valid_plans = {"standard", "pro", "business", "enterprise"}
+    if plan_clean not in valid_plans:
+        raise HTTPException(400, f"Unsupported plan: {plan} (must be standard, pro, business, or enterprise)")
 
-    days = {"monthly": 30, "yearly": 365, "lifetime": None}[billing_cycle]
-    expiry = datetime.now(timezone.utc) + timedelta(days=days) if days else None
-    raw_key = "LP-" + secrets.token_urlsafe(24)
+    duration_days = days
+    cycle = billing_cycle.lower().strip()
+    if duration_days is not None and duration_days > 0:
+        cycle = f"{duration_days}_days"
+    elif cycle == "yearly":
+        duration_days = 365
+    elif cycle == "quarterly":
+        duration_days = 90
+    elif cycle == "lifetime":
+        duration_days = None
+    else:
+        duration_days = 30
+        cycle = "monthly"
+
+    expiry = datetime.now(timezone.utc) + timedelta(days=duration_days) if duration_days else None
+    prefix = plan_clean[:3].upper()
+    raw_key = f"LP-{prefix}-" + secrets.token_hex(8).upper()
+
     item = License(
         id=str(uuid4()),
         key_hash=hash_license_key(raw_key),
-        plan=plan,
-        billing_cycle=billing_cycle,
+        plan=plan_clean,
+        billing_cycle=cycle,
         active=True,
         expires_at=expiry,
         max_devices=1,
@@ -584,12 +674,13 @@ def admin_create_license(
     db.commit()
     db.refresh(item)
 
-    log_audit(db, admin.id, admin.email, "LICENSE_CREATED", "license", item.id, f"Plan: {plan}, Cycle: {billing_cycle}")
+    log_audit(db, admin.id, admin.email, "LICENSE_CREATED", "license", item.id, f"Plan: {plan_clean}, Days: {duration_days}")
     return {
         "id": item.id,
         "license_key": raw_key,
         "plan": item.plan,
         "billing_cycle": item.billing_cycle,
+        "duration_days": duration_days,
         "expires_at": item.expires_at,
         "issued_by": getattr(admin, "admin_role", "staff"),
         "note": "Copy this key now; it cannot be retrieved again."

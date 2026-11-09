@@ -41,10 +41,11 @@ class _LicenseActivationScreenState extends State<LicenseActivationScreen> {
       final updatedUser = await widget.apiClient.getUserProfile();
 
       if (!mounted) return;
+      final daysText = res["days_remaining"] != null ? "${res["days_remaining"]} days" : "${res["billing_cycle"]}";
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'License activated successfully! Plan: ${res["plan"].toString().toUpperCase()} (${res["billing_cycle"]})',
+            'License activated successfully! Plan: ${res["plan"].toString().toUpperCase()} ($daysText)',
           ),
           backgroundColor: Colors.green,
         ),
@@ -167,7 +168,7 @@ class _LicenseActivationScreenState extends State<LicenseActivationScreen> {
                       TextField(
                         controller: _keyController,
                         decoration: InputDecoration(
-                          hintText: 'e.g., LP-X9fA... (from Admin Panel)',
+                          hintText: 'e.g., LP-ENT-XXXX-XXXX (from your Admin)',
                           filled: true,
                           fillColor: Colors.grey.shade50,
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),

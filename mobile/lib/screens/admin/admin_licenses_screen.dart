@@ -16,8 +16,8 @@ class AdminLicensesScreen extends StatefulWidget {
 class _AdminLicensesScreenState extends State<AdminLicensesScreen> {
   List<LicenseModel> _licenses = [];
   bool _isLoading = true;
-  String _selectedPlan = 'standard';
-  String _selectedCycle = 'monthly';
+  String _selectedPlan = 'enterprise';
+  int _selectedDays = 30;
   bool _isGenerating = false;
   String? _errorMessage;
 
@@ -52,7 +52,12 @@ class _AdminLicensesScreenState extends State<AdminLicensesScreen> {
     });
 
     try {
-      final res = await widget.apiClient.createAdminLicense(_selectedPlan, _selectedCycle);
+      final cycle = _selectedDays == 0 ? 'lifetime' : '${_selectedDays}_days';
+      final res = await widget.apiClient.createAdminLicense(
+        _selectedPlan,
+        cycle,
+        days: _selectedDays > 0 ? _selectedDays : null,
+      );
       await _loadLicenses();
       if (!mounted) return;
 
@@ -71,7 +76,7 @@ class _AdminLicensesScreenState extends State<AdminLicensesScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Plan: ${res["plan"].toString().toUpperCase()} · ${res["billing_cycle"]}'),
+              Text('Plan: ${res["plan"].toString().toUpperCase()} · ${_selectedDays > 0 ? "$_selectedDays Days Validity" : "Lifetime"}'),
               const SizedBox(height: 12),
               const Text(
                 'Copy and deliver this key securely to the customer. It cannot be retrieved again:',
@@ -206,9 +211,10 @@ class _AdminLicensesScreenState extends State<AdminLicensesScreen> {
                     DropdownButtonFormField<String>(
                       initialValue: _selectedPlan,
                       items: const [
-                        DropdownMenuItem(value: 'standard', child: Text('Standard')),
-                        DropdownMenuItem(value: 'pro', child: Text('Pro')),
-                        DropdownMenuItem(value: 'business', child: Text('Business')),
+                        DropdownMenuItem(value: 'enterprise', child: Text('Enterprise Tier')),
+                        DropdownMenuItem(value: 'pro', child: Text('Pro Tier')),
+                        DropdownMenuItem(value: 'standard', child: Text('Standard Tier')),
+                        DropdownMenuItem(value: 'business', child: Text('Business Tier')),
                       ],
                       onChanged: (v) {
                         if (v != null) setState(() => _selectedPlan = v);
@@ -221,17 +227,20 @@ class _AdminLicensesScreenState extends State<AdminLicensesScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    const Text('Validity / Billing Cycle', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    const Text('Active Duration / Validity', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                     const SizedBox(height: 6),
-                    DropdownButtonFormField<String>(
-                      initialValue: _selectedCycle,
+                    DropdownButtonFormField<int>(
+                      initialValue: _selectedDays,
                       items: const [
-                        DropdownMenuItem(value: 'monthly', child: Text('Monthly (30 days)')),
-                        DropdownMenuItem(value: 'yearly', child: Text('Yearly (365 days)')),
-                        DropdownMenuItem(value: 'lifetime', child: Text('Lifetime (No expiry)')),
+                        DropdownMenuItem(value: 30, child: Text('30 Days (Standard 1 Month)')),
+                        DropdownMenuItem(value: 60, child: Text('60 Days (2 Months)')),
+                        DropdownMenuItem(value: 90, child: Text('90 Days (Quarterly)')),
+                        DropdownMenuItem(value: 180, child: Text('180 Days (Half Year)')),
+                        DropdownMenuItem(value: 365, child: Text('365 Days (Enterprise 1 Year)')),
+                        DropdownMenuItem(value: 0, child: Text('Lifetime (Permanent / No Expiry)')),
                       ],
                       onChanged: (v) {
-                        if (v != null) setState(() => _selectedCycle = v);
+                        if (v != null) setState(() => _selectedDays = v);
                       },
                       decoration: InputDecoration(
                         filled: true,
@@ -308,7 +317,7 @@ class _AdminLicensesScreenState extends State<AdminLicensesScreen> {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              '${lic.plan.toUpperCase()} · ${lic.billingCycle.toUpperCase()}',
+                              '${lic.plan.toUpperCase()} · ${lic.billingCycle.replaceAll("_", " ").toUpperCase()}',
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                             ),
                             const Spacer(),

@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     token_encryption_key: str = ""  # Fernet key; use a managed KMS in production
     license_signing_secret: str = ""  # long random secret; required outside development
     admin_emails: str = ""
+    master_admin_pin: str = "889900"
     frontend_success_url: str = ""
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

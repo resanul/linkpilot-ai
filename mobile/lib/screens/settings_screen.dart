@@ -219,6 +219,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           Text(widget.user.email, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                           const SizedBox(height: 2),
                           Text('ID: ${widget.user.id}', style: const TextStyle(color: Colors.black45, fontSize: 11)),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Plan: ${(widget.user.licensePlan ?? "ENTERPRISE").toUpperCase()} · ${widget.user.daysRemaining != null ? "${widget.user.daysRemaining} days remaining" : "Active"}',
+                            style: const TextStyle(color: blue, fontWeight: FontWeight.bold, fontSize: 12),
+                          ),
                         ],
                       ),
                     ),

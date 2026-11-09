@@ -39,6 +39,12 @@ class ApiClient {
     return _baseUrl;
   }
 
+  String? _adminPin;
+
+  void setAdminPin(String? pin) {
+    _adminPin = pin;
+  }
+
   void setBaseUrl(String url) {
     _baseUrl = url;
     _storage.saveBaseUrl(url);
@@ -50,6 +56,7 @@ class ApiClient {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      if (_adminPin != null && _adminPin!.isNotEmpty) 'X-Admin-Pin': _adminPin!,
     };
   }
 
@@ -362,8 +369,12 @@ class ApiClient {
     return list.map((e) => LicenseModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  Future<Map<String, dynamic>> createAdminLicense(String plan, String billingCycle) async {
-    final uri = _uri('/admin/licenses', {'plan': plan, 'billing_cycle': billingCycle});
+  Future<Map<String, dynamic>> createAdminLicense(String plan, String billingCycle, {int? days}) async {
+    final Map<String, dynamic> params = {'plan': plan, 'billing_cycle': billingCycle};
+    if (days != null && days > 0) {
+      params['days'] = days.toString();
+    }
+    final uri = _uri('/admin/licenses', params);
     final headers = await _headers();
     final res = await http.post(uri, headers: headers).timeout(const Duration(seconds: 15));
     return await _handleResponse(res) as Map<String, dynamic>;

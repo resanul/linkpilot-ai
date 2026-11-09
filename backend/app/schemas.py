@@ -80,9 +80,15 @@ class UserProfileOut(BaseModel):
     license_plan: str | None = None
     license_cycle: str | None = None
     license_expires_at: datetime | None = None
+    days_remaining: int | None = None
     linkedin_connected: bool
     linkedin_profile_name: str | None = None
     created_at: datetime
+
+class AdminLicenseCreate(BaseModel):
+    plan: str = Field(default="enterprise")
+    billing_cycle: str = Field(default="monthly")
+    days: int | None = Field(default=30)
 
 class AuditLogOut(BaseModel):
     id: str

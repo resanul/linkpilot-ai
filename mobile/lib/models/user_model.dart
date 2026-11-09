@@ -7,6 +7,7 @@ class UserModel {
   final String? licensePlan;
   final String? licenseCycle;
   final DateTime? licenseExpiresAt;
+  final int? daysRemaining;
   final bool linkedinConnected;
   final String? linkedinProfileName;
   final DateTime createdAt;
@@ -20,6 +21,7 @@ class UserModel {
     this.licensePlan,
     this.licenseCycle,
     this.licenseExpiresAt,
+    this.daysRemaining,
     required this.linkedinConnected,
     this.linkedinProfileName,
     required this.createdAt,
@@ -32,6 +34,7 @@ class UserModel {
     String email = 'resanul@gmail.com',
     bool linkedinConnected = false,
     String? linkedinProfileName,
+    int? daysRemaining = 30,
   }) {
     return UserModel(
       id: 'project-owner',
@@ -39,8 +42,9 @@ class UserModel {
       role: 'super_admin',
       adminRole: 'super_admin',
       hasActiveLicense: true,
-      licensePlan: 'Project Mode',
-      licenseCycle: 'Git Automation',
+      licensePlan: 'Enterprise Plan',
+      licenseCycle: '30_days',
+      daysRemaining: daysRemaining,
       linkedinConnected: linkedinConnected,
       linkedinProfileName: linkedinProfileName,
       createdAt: DateTime.now(),
@@ -59,6 +63,7 @@ class UserModel {
       licenseExpiresAt: json['license_expires_at'] != null
           ? DateTime.tryParse(json['license_expires_at'] as String)
           : null,
+      daysRemaining: json['days_remaining'] as int?,
       linkedinConnected: (json['linkedin_connected'] as bool?) ?? false,
       linkedinProfileName: json['linkedin_profile_name'] as String?,
       createdAt: json['created_at'] != null
