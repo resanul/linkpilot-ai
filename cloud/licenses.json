@@ -1,0 +1,57 @@
+[
+  {
+    "id": "lic-001",
+    "key": "LP-ENT-8899-2026",
+    "plan": "Enterprise",
+    "billing_cycle": "30_days",
+    "duration_days": 30,
+    "max_devices": 3,
+    "is_active": true,
+    "assigned_to": null,
+    "created_at": "2026-11-09T00:00:00Z"
+  },
+  {
+    "id": "lic-002",
+    "key": "LP-PRO-60D-2026",
+    "plan": "Pro",
+    "billing_cycle": "60_days",
+    "duration_days": 60,
+    "max_devices": 2,
+    "is_active": true,
+    "assigned_to": "demo.client@linkpilot.ai",
+    "created_at": "2026-11-09T00:00:00Z"
+  },
+  {
+    "id": "lic-003",
+    "key": "LP-STD-30D-2026",
+    "plan": "Standard",
+    "billing_cycle": "30_days",
+    "duration_days": 30,
+    "max_devices": 1,
+    "is_active": true,
+    "assigned_to": null,
+    "created_at": "2026-11-09T00:00:00Z"
+  },
+  {
+    "id": "lic-004",
+    "key": "LP-ENT-90D-7731",
+    "plan": "Enterprise",
+    "billing_cycle": "90_days",
+    "duration_days": 90,
+    "max_devices": 5,
+    "is_active": true,
+    "assigned_to": null,
+    "created_at": "2026-11-09T00:00:00Z"
+  },
+  {
+    "id": "lic-005",
+    "key": "LP-ENT-LIFETIME-001",
+    "plan": "Enterprise",
+    "billing_cycle": "lifetime",
+    "duration_days": null,
+    "max_devices": 10,
+    "is_active": true,
+    "assigned_to": "resanul@gmail.com",
+    "created_at": "2026-11-09T00:00:00Z"
+  }
+]

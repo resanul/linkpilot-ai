@@ -1,0 +1,50 @@
+[
+  {
+    "id": "u-admin-resanul",
+    "email": "resanul@gmail.com",
+    "role": "super_admin",
+    "admin_role": "super_admin",
+    "is_approved": true,
+    "approved_at": "2026-11-09T00:00:00Z",
+    "has_active_license": true,
+    "license_key": "LP-ENT-RESANUL-2026",
+    "license_plan": "Enterprise",
+    "license_cycle": "lifetime",
+    "days_remaining": null,
+    "linkedin_connected": false,
+    "linkedin_profile_name": "Mir Resanul Karim",
+    "created_at": "2026-11-09T00:00:00Z"
+  },
+  {
+    "id": "u-admin-linkpilot",
+    "email": "admin@linkpilot.ai",
+    "role": "super_admin",
+    "admin_role": "super_admin",
+    "is_approved": true,
+    "approved_at": "2026-11-09T00:00:00Z",
+    "has_active_license": true,
+    "license_key": "LP-ENT-MASTER-2026",
+    "license_plan": "Enterprise",
+    "license_cycle": "lifetime",
+    "days_remaining": null,
+    "linkedin_connected": false,
+    "linkedin_profile_name": "LinkPilot Administrator",
+    "created_at": "2026-11-09T00:00:00Z"
+  },
+  {
+    "id": "u-customer-demo",
+    "email": "demo.client@linkpilot.ai",
+    "role": "user",
+    "admin_role": null,
+    "is_approved": true,
+    "approved_at": "2026-11-09T01:00:00Z",
+    "has_active_license": true,
+    "license_key": "LP-PRO-60D-2026",
+    "license_plan": "Pro",
+    "license_cycle": "60_days",
+    "days_remaining": 60,
+    "linkedin_connected": false,
+    "linkedin_profile_name": null,
+    "created_at": "2026-11-09T01:00:00Z"
+  }
+]
