@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import '../models/user_model.dart';
 import '../services/api_client.dart';
-import 'dashboard_screen.dart';
+import 'login_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   final ApiClient apiClient;
@@ -12,7 +11,7 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  String _status = 'Initializing LinkPilot AI...';
+  final String _status = 'Select Login Role...';
 
   @override
   void initState() {
@@ -21,34 +20,14 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _checkSession() async {
-    await Future.delayed(const Duration(milliseconds: 500));
+    await Future.delayed(const Duration(milliseconds: 700));
     if (!mounted) return;
 
-    setState(() => _status = 'Launching Project Mode...');
-    try {
-      final user = await widget.apiClient.getUserProfile();
-      if (!mounted) return;
-
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => DashboardScreen(
-            apiClient: widget.apiClient,
-            initialUser: user,
-          ),
-        ),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      final defaultUser = UserModel.projectUser();
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => DashboardScreen(
-            apiClient: widget.apiClient,
-            initialUser: defaultUser,
-          ),
-        ),
-      );
-    }
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => LoginScreen(apiClient: widget.apiClient),
+      ),
+    );
   }
 
   @override

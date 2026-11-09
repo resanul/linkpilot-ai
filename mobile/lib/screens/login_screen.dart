@@ -106,10 +106,16 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _signInWithToken(String token, {bool forceAdmin = false}) async {
-    if (token.trim().isEmpty) {
-      setState(() => _errorMessage = 'Please provide a valid Google ID token.');
+  Future<void> _signInWithToken(String rawInput, {bool forceAdmin = false}) async {
+    final input = rawInput.trim();
+    if (input.isEmpty) {
+      setState(() => _errorMessage = 'Please enter your Google account email or ID token.');
       return;
+    }
+
+    String token = input;
+    if (!token.startsWith('test-token-') && !token.startsWith('ey') && token.contains('@')) {
+      token = 'test-token-$token';
     }
 
     setState(() {
@@ -315,7 +321,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: FilledButton.icon(
                     onPressed: _enterProjectMode,
                     icon: const Icon(Icons.rocket_launch, color: Colors.white, size: 20),
-                    label: const Text('Enter Project Mode (Git & Direct APIs)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    label: const Text('Log In as User (Instant Project Mode)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                     style: FilledButton.styleFrom(
                       backgroundColor: const Color(0xFF16A34A),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -352,15 +358,14 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 16),
                         const Text(
-                          'Google ID Token',
+                          'Google Account Email / Token',
                           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                         ),
                         const SizedBox(height: 6),
                         TextField(
                           controller: _tokenController,
-                          maxLines: 2,
                           decoration: InputDecoration(
-                            hintText: 'Paste Google ID token or select a customer profile below',
+                            hintText: 'e.g. resanul@gmail.com or paste token',
                             filled: true,
                             fillColor: Colors.grey.shade50,
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
