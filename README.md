@@ -6,6 +6,8 @@
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Flutter](https://img.shields.io/badge/Flutter-Android%20App-02569B?logo=flutter&logoColor=white)](https://flutter.dev/)
 
+> 🧠 **Project Memory & Task Changelog**: See [TASK_MEMORY_AND_CHANGELOG.md](TASK_MEMORY_AND_CHANGELOG.md) for the complete chronological task ledger, problem-solution incident records, current system capabilities, and upcoming roadmap.
+
 **LinkPilot AI** is an autonomous content engine designed to build technical cybersecurity authority on LinkedIn without ongoing manual effort. It generates high-engagement, domain-specialized cybersecurity posts and automatically publishes them to LinkedIn on a persistent daily schedule (20:00 Asia/Dhaka / 14:00 UTC).
 
 ---
