@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/user_model.dart';
 import '../services/secure_storage_service.dart';
 import '../services/api_client.dart';
 import 'license_activation_screen.dart';
@@ -27,6 +28,20 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _loadCurrentApiUrl() async {
     final url = await widget.apiClient.getBaseUrl();
     _apiUrlController.text = url;
+  }
+
+  Future<void> _enterProjectMode() async {
+    final user = UserModel.projectUser();
+    await SecureStorageService.instance.saveUserEmail('resanul@gmail.com');
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => DashboardScreen(
+          apiClient: widget.apiClient,
+          initialUser: user,
+        ),
+      ),
+    );
   }
 
   Future<void> _signInWithToken(String token) async {
@@ -114,11 +129,27 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 6),
               const Center(
                 child: Text(
-                  'Commercial Cybersecurity Post Automation',
+                  'Autonomous Cybersecurity Post Automation',
                   style: TextStyle(color: Colors.black54, fontSize: 13),
                 ),
               ),
-              const SizedBox(height: 36),
+              const SizedBox(height: 24),
+
+              // Instant Project Mode button
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: FilledButton.icon(
+                  onPressed: _enterProjectMode,
+                  icon: const Icon(Icons.rocket_launch, color: Colors.white, size: 20),
+                  label: const Text('Enter Project Mode (Git & Direct APIs)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF16A34A),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
 
               if (_errorMessage != null)
                 Container(

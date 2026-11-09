@@ -28,6 +28,25 @@ class UserModel {
   bool get isAdmin => adminRole == 'super_admin' || adminRole == 'staff';
   bool get isSuperAdmin => adminRole == 'super_admin';
 
+  factory UserModel.projectUser({
+    String email = 'resanul@gmail.com',
+    bool linkedinConnected = false,
+    String? linkedinProfileName,
+  }) {
+    return UserModel(
+      id: 'project-owner',
+      email: email,
+      role: 'super_admin',
+      adminRole: 'super_admin',
+      hasActiveLicense: true,
+      licensePlan: 'Project Mode',
+      licenseCycle: 'Git Automation',
+      linkedinConnected: linkedinConnected,
+      linkedinProfileName: linkedinProfileName,
+      createdAt: DateTime.now(),
+    );
+  }
+
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
       id: json['id'] as String,

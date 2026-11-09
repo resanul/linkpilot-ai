@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../models/user_model.dart';
 import '../services/api_client.dart';
 import '../services/secure_storage_service.dart';
@@ -435,7 +434,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
 
             const SizedBox(height: 20),
-            const Text('COMMERCIAL LICENSE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black54)),
+            const Text('GIT AUTOMATION & SCHEDULE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black54)),
             const SizedBox(height: 8),
 
             Card(
@@ -449,24 +448,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Column(
                   children: [
                     _SettingRow(
-                      icon: Icons.workspace_premium,
-                      title: 'Subscription Tier',
-                      value: (widget.user.licensePlan ?? 'Standard').toUpperCase(),
+                      icon: Icons.code,
+                      title: 'GitHub Repository',
+                      value: 'resanul/linkpilot-ai',
                       highlight: true,
                     ),
                     const Divider(height: 20),
                     _SettingRow(
-                      icon: Icons.calendar_month,
-                      title: 'Billing Cycle',
-                      value: (widget.user.licenseCycle ?? 'Monthly').toUpperCase(),
+                      icon: Icons.access_time_filled,
+                      title: 'Autonomous Daily Post',
+                      value: '20:00 Asia/Dhaka (14:00 UTC)',
                     ),
                     const Divider(height: 20),
                     _SettingRow(
-                      icon: Icons.timer,
-                      title: 'Expires At',
-                      value: widget.user.licenseExpiresAt != null
-                          ? DateFormat('yyyy-MM-dd').format(widget.user.licenseExpiresAt!)
-                          : 'Lifetime License (No Expiry)',
+                      icon: Icons.storage,
+                      title: 'Execution Mode',
+                      value: 'Serverless (GitHub Actions + Phone)',
+                      highlight: true,
+                    ),
+                    const Divider(height: 20),
+                    _SettingRow(
+                      icon: Icons.history_edu,
+                      title: 'Database Persistence',
+                      value: 'SQLite (On Phone + Git commits)',
                     ),
                   ],
                 ),
@@ -474,7 +478,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
 
             const SizedBox(height: 20),
-            const Text('DEVELOPER & SERVER CONFIGURATION', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black54)),
+            const Text('OPTIONAL LOCAL SERVER (DISABLED BY DEFAULT)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black54)),
             const SizedBox(height: 8),
 
             Card(
@@ -488,8 +492,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Backend API Server URL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    const SizedBox(height: 6),
+                    const Text('Local FastAPI Server URL (Not needed for Git mode)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    const SizedBox(height: 4),
+                    const Text('Leave as default. Direct on-device and Git automation is active.', style: TextStyle(fontSize: 11, color: Colors.black54)),
+                    const SizedBox(height: 10),
                     Row(
                       children: [
                         Expanded(

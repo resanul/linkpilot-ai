@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import '../services/secure_storage_service.dart';
+import '../models/user_model.dart';
 import '../services/api_client.dart';
-import 'login_screen.dart';
-import 'license_activation_screen.dart';
 import 'dashboard_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -23,46 +21,32 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _checkSession() async {
-    await Future.delayed(const Duration(milliseconds: 600));
-    final token = await SecureStorageService.instance.getAuthToken();
+    await Future.delayed(const Duration(milliseconds: 500));
     if (!mounted) return;
 
-    if (token == null || token.isEmpty) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => LoginScreen(apiClient: widget.apiClient)),
-      );
-      return;
-    }
-
-    setState(() => _status = 'Verifying license & profile...');
+    setState(() => _status = 'Launching Project Mode...');
     try {
       final user = await widget.apiClient.getUserProfile();
       if (!mounted) return;
 
-      if (!user.hasActiveLicense) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => LicenseActivationScreen(
-              apiClient: widget.apiClient,
-              user: user,
-            ),
-          ),
-        );
-      } else {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => DashboardScreen(
-              apiClient: widget.apiClient,
-              initialUser: user,
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      // Network error or invalid token: go to Login
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => LoginScreen(apiClient: widget.apiClient)),
+        MaterialPageRoute(
+          builder: (_) => DashboardScreen(
+            apiClient: widget.apiClient,
+            initialUser: user,
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      final defaultUser = UserModel.projectUser();
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => DashboardScreen(
+            apiClient: widget.apiClient,
+            initialUser: defaultUser,
+          ),
+        ),
       );
     }
   }
