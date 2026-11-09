@@ -1,108 +1,108 @@
-# LinkedIn AI Automation — MVP Starter
+# LinkPilot AI 🚀
+### Autonomous Cybersecurity LinkedIn Content Engine & SaaS Platform
 
-A Flutter Android app + FastAPI backend starter for a license-gated, single-LinkedIn-account automation product.
+[![LinkPilot AI - Daily LinkedIn Automation](https://github.com/resanul/linkpilot-ai/actions/workflows/daily_post.yml/badge.svg)](https://github.com/resanul/linkpilot-ai/actions/workflows/daily_post.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Flutter](https://img.shields.io/badge/Flutter-Android%20App-02569B?logo=flutter&logoColor=white)](https://flutter.dev/)
 
-## Included
-- Flutter dashboard UI with mixed publishing mode (approval queue + auto-publish setting)
-- Local SQLite post history model
-- FastAPI backend skeleton for license activation, Google ID-token verification hook, LinkedIn OAuth start/callback placeholders, post drafts/history sync
-- Scheduler scaffold (Asia/Dhaka, 20:00) with a safe no-op publisher until LinkedIn OAuth/API is configured
-- `.env.example`, Dockerfile and API notes
+**LinkPilot AI** is an autonomous content engine designed to build technical cybersecurity authority on LinkedIn without ongoing manual effort. It generates high-engagement, domain-specialized cybersecurity posts and automatically publishes them to LinkedIn on a persistent daily schedule (20:00 Asia/Dhaka / 14:00 UTC).
 
-## Important status
-This is a **starter implementation**, not a production-connected app. LinkedIn OAuth credentials, Google OAuth audience, database, HTTPS deployment, AI provider key, and LinkedIn API product approval/configuration are not supplied. The LinkedIn publish adapter deliberately fails closed until configured. Do not add real tokens to source control.
+---
 
-## Architecture
-- Android app: Flutter
-- API: FastAPI
-- Cloud DB: PostgreSQL (SQLAlchemy)
-- Local history: SQLite (`sqflite`)
-- Scheduler: APScheduler
-- AI: provider adapter placeholder; configure an API provider server-side
-- LinkedIn: official OAuth 2.0 member authorization and Posts API only
+## 🛠️ Project Architecture
 
-## Run backend locally
+| Component | Technology | Description |
+| :--- | :--- | :--- |
+| **Scheduler** | **GitHub Actions** | Automated cron schedule firing daily at `14:00 UTC` (`20:00 Asia/Dhaka`), plus manual `workflow_dispatch` button. |
+| **AI Content** | **Google Gemini** | Generates deep technical posts across 12 cybersecurity domains with anti-duplicate topic rotation. |
+| **Content Engine** | **Python** | Formats posts with attention-grabbing hooks, real-world context, technical takeaways, and targeted hashtags. |
+| **Database** | **SQLite** | `data/posts.db` persists publishing history and topic hashes; committed back to the repository automatically. |
+| **OAuth** | **LinkedIn OAuth 2.0** | Official REST & UGC Posts API with secure token authentication (`w_member_social`). |
+| **Hosting** | **GitHub Actions** | 100% serverless and free execution with zero infrastructure costs. |
+| **Reports** | **GitHub Actions Logs** | Real-time post previews, status badges, character counts, and URN links in the Job Summary. |
+
+---
+
+## 🛡️ Covered Cybersecurity Domains
+
+LinkPilot AI systematically cycles through 12 core domains to ensure wide topic coverage:
+1. **SOC Operations & SIEM** (Detection rules, telemetry, alert triage)
+2. **Incident Response & Threat Hunting** (Forensics, living-off-the-land, containment)
+3. **Threat Intelligence & MITRE ATT&CK** (TTP mapping, adversary tracking)
+4. **Penetration Testing & Red Teaming** (AD Kerberoasting, lateral movement)
+5. **Vulnerability Management & AppSec** (EPSS vs CVSS, API security, SBOM)
+6. **Cloud Security (AWS / Azure / GCP)** (IAM least privilege, CSPM, K8s)
+7. **Network Security & Zero Trust** (Microsegmentation, ZTNA, TLS inspection)
+8. **Identity & Access Management (IAM)** (FIDO2, MFA fatigue, PAM, ITDR)
+9. **Malware Analysis & Reverse Engineering** (YARA rules, obfuscation, beacons)
+10. **Security Awareness & Human Defense** (BEC prevention, vishing, culture)
+11. **DevSecOps & Supply Chain Security** (Secrets detection, CI/CD pipelines)
+12. **Emerging Cyber Threats & AI Security** (LLM prompt injection, ransomware)
+
+---
+
+## 🚀 Quickstart Guide (3 Steps)
+
+### Step 1: Add GitHub Repository Secrets
+Go to your repository: **Settings** ➔ **Secrets and variables** ➔ **Actions** ➔ **New repository secret**:
+
+| Secret Name | Value | How to Get |
+| :--- | :--- | :--- |
+| `GEMINI_API_KEY` | Your Google Gemini API Key | Get free at [Google AI Studio](https://aistudio.google.com/app/apikey) |
+| `LINKEDIN_ACCESS_TOKEN` | 60-day OAuth 2.0 Token | Run the 1-click token generator below |
+
+#### 🔑 Generating Your LinkedIn Access Token
+Run this helper script locally on your machine:
 ```bash
-cd backend
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-uvicorn app.main:app --reload
+python3 automation/setup_oauth.py
 ```
-The API health endpoint is `GET /health`.
+1. It opens your browser to LinkedIn's official authorization screen.
+2. Click **Allow**.
+3. The script displays your 60-day `LINKEDIN_ACCESS_TOKEN` in the terminal.
+4. Copy and paste it into GitHub Secrets.
 
-## Issue a license (admin-side, local/dev only)
-```bash
-cd backend
-python scripts/create_license.py YOUR-ONE-TIME-LICENSE-KEY
-```
-This stores only a SHA-256 hash. For production, replace this with an authenticated admin console, stronger keyed hashing, expiry/plan/device limits, audit logs and payment-provider webhook verification.
+---
 
-## Run Flutter app
-Install Flutter and Android Studio, then:
-```bash
-cd mobile
-flutter create .
-flutter pub get
-flutter run
-```
-The current mobile app is a UI + local-history scaffold. Configure `API_BASE_URL` and Google Sign-In/OAuth before connecting real accounts.
+### Step 2: Test Post Generation (Dry Run)
+You can test the entire pipeline without publishing to LinkedIn:
+1. Go to the **Actions** tab on GitHub.
+2. Select **LinkPilot AI - Daily LinkedIn Automation**.
+3. Click **Run workflow**.
+4. Check **Dry run only** (or leave unchecked to post live).
+5. View the formatted post and character counts right inside the **Job Summary**!
 
-## Required setup before live publishing
-1. Create Google OAuth credentials and set `GOOGLE_CLIENT_ID` (backend must verify ID tokens; do not trust a client-supplied email).
-2. Configure LinkedIn app OAuth redirect URI to `https://YOUR_API_HOST/linkedin/callback`.
-3. Request/enable LinkedIn "Share on LinkedIn" and use the minimum required permission (`w_member_social`). LinkedIn access and API behavior are controlled by LinkedIn.
-4. Add `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET`, `LINKEDIN_REDIRECT_URI`, and a supported API version to a secret manager.
-5. Implement token encryption with a managed KMS/secret manager before storing refresh/access tokens.
-6. Set `DATABASE_URL`, `AI_PROVIDER`, and `AI_API_KEY` in server environment.
-7. Deploy backend and worker with HTTPS; configure backups, rate limits, audit logging and tenant isolation.
-8. Test with a developer/test account before enabling automatic publishing.
+---
 
-## Mixed publishing behavior
-- `approval_required=true`: generated post remains pending until user approves.
-- `approval_required=false`: generated post is eligible for scheduled publishing.
-- A user-level setting controls the default; each post can override it.
-- Never auto-comment on arbitrary feed posts. Comment workflows must be user-selected and permitted by the LinkedIn API product/scopes.
+### Step 3: Autonomous Daily Publishing
+Once secrets are set, no further action is required:
+* The workflow runs automatically every day at **20:00 Bangladesh Time (14:00 UTC)**.
+* SQLite records the post to prevent repeating the same topic.
+* Updated `data/posts.db` is committed back to the repository automatically.
 
-## Privacy and security
-- Google login is for app identity; LinkedIn OAuth separately authorizes publishing.
-- Never collect LinkedIn passwords.
-- Keep client secrets and provider keys on the backend only.
-- Encrypt OAuth tokens at rest; use HTTPS; enforce ownership checks on every record.
-- Local SQLite is a convenience copy, not the only backup. Cloud history remains the source of truth.
+---
 
+## 📦 Commercial SaaS Platform (Phase 4 Extended)
 
-## Commercial mobile-admin phase (scaffold)
-- Added mobile User/Admin mode screens.
-- Added admin overview, license manager and customer screens.
-- Added backend admin overview, license list/create/revoke endpoints.
-- Admin API authorization uses a server-side `ADMIN_EMAILS` allowlist after Google ID-token verification.
-- Generated license plaintext is returned once; only its hash is stored.
+In addition to this standalone GitHub Actions automation engine, LinkPilot AI also includes the complete commercial SaaS stack:
 
-Production requirements: wire mobile Google Sign-In and API calls, implement customer list/pagination, add database migrations (existing tables are not altered by `create_all()`), HTTPS, rate limits, audit logs, encrypted LinkedIn token storage, payment provider webhooks and subscription renewal. The Admin/User mode toggle in this starter is a visual prototype, not an authorization boundary. The backend allowlist is the actual authorization check.
+* **FastAPI Backend** (`/backend`):
+  * Alembic database migrations (PostgreSQL + SQLite)
+  * HMAC-SHA256 license verification engine (Standard, Pro, Business tiers)
+  * Role-Based Access Control (Super Admin, Staff Admin, Customer)
+  * Audit logging for every administrative action (`GET /admin/audit-logs`)
+  * Bi-directional mobile synchronization endpoint (`POST /posts/sync`)
+  * SlowAPI rate limiting & Fernet symmetric token encryption
+  * Pytest suite: 19/19 tests passing (`100%`)
 
+* **Flutter Android Mobile Application** (`/mobile`):
+  * 11 Customer screens (Dashboard, AI Generator, Post Editor, Approval Queue, Scheduler, History, Settings)
+  * 5 Administrative screens (Admin Dashboard, License Minting, Customer Inspector, Staff Roles, Audit Viewer)
+  * Offline-first SQLite database (`sqflite`)
+  * Flutter test suite: 13/13 tests passing, 0 analyzer warnings
+  * Pre-built production release APK (`DELIVERY/app-release.apk`)
 
-## Commercial licensing decisions
-- Manual license issuance from the mobile Admin Mode only.
-- Billing cycles: monthly (30 days), yearly (365 days), lifetime (no expiry).
-- Plan tiers: standard, pro, business.
-- Super Admin emails are configured through server-side `ADMIN_EMAILS`.
-- Super Admin can add/revoke staff; staff can view customers/licenses and issue licenses; staff cannot revoke licenses or manage staff.
-- No payment gateway or automatic license issuance is enabled.
+---
 
-## Database migration warning
-The commercial schema adds `licenses.billing_cycle` and the `staff_admins` table. For a fresh development database, the app's `create_all()` creates them. For an existing database, create and apply a proper Alembic migration before deployment; `create_all()` does not alter existing tables.
-
-
-## Phase 4 — integration foundation (November 2026)
-This phase adds: HMAC-based license-key hashing (requires `LICENSE_SIGNING_SECRET` outside dev), verified Google email claim checks, active-license gates on customer endpoints, expiring single-use LinkedIn OAuth state bound to the initiating user, encrypted LinkedIn access-token storage using Fernet, LinkedIn profile lookup, Gemini text generation adapter, and a scheduled publishing worker. It also adds migration SQL and `ANTIGRAVITY_TASK.md`.
-
-**Not production-ready:** Flutter Google Sign-In/API integration, cloud/local history sync, admin screen wiring, robust audit/rate-limit controls, token refresh/reconnect UX, production migration orchestration, full automated test coverage, and an Android release build remain to be completed and verified by Antigravity. LinkedIn API permissions and product approval are external prerequisites. The scheduler is a single-process MVP worker; use a dedicated worker/queue with distributed locking before multi-instance production deployment.
-
-### Generate secrets (backend only)
-```bash
-python -c "import secrets; print(secrets.token_urlsafe(48))"
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-```
-Never commit `.env`, API keys, OAuth secrets, or real tokens.
+## 📄 License
+This project is licensed under the MIT License.

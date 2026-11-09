@@ -1,0 +1,62 @@
+name: LinkPilot AI - Daily LinkedIn Automation
+
+on:
+  schedule:
+    # Runs at 14:00 UTC every day (= 20:00 Asia/Dhaka Bangladesh Time)
+    - cron: '0 14 * * *'
+  workflow_dispatch:
+    inputs:
+      domain:
+        description: 'Cybersecurity domain override (or "auto" for smart rotation)'
+        required: false
+        default: 'auto'
+      dry_run:
+        description: 'Dry run only (generate and validate without posting to LinkedIn)'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  publish_daily_post:
+    name: Generate & Publish Cybersecurity Post
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'automation/requirements.txt'
+
+      - name: 📦 Install Automation Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r automation/requirements.txt
+
+      - name: 🚀 Run LinkPilot Content Engine & LinkedIn Publisher
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          LINKEDIN_ACCESS_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          DOMAIN_OVERRIDE: ${{ inputs.domain || 'auto' }}
+        run: |
+          python automation/main.py
+
+      - name: 💾 Commit & Persist SQLite Post History
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/posts.db
+          if git diff --staged --quiet; then
+            echo "No database changes to commit."
+          else
+            git commit -m "chore(data): record automated post history [skip ci]"
+            git push origin HEAD
+          fi
