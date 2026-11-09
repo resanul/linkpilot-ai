@@ -239,10 +239,15 @@ class ApiClient {
   Future<String> generateAIPost(String topic) async {
     final uri = _uri('/ai/generate');
     final headers = await _headers();
+    final customApiKey = await _storage.getGeminiApiKey();
+    final Map<String, dynamic> body = {'topic': topic};
+    if (customApiKey != null && customApiKey.isNotEmpty) {
+      body['gemini_api_key'] = customApiKey;
+    }
     final res = await http.post(
       uri,
       headers: headers,
-      body: jsonEncode({'topic': topic}),
+      body: jsonEncode(body),
     ).timeout(const Duration(seconds: 45));
     final data = await _handleResponse(res) as Map<String, dynamic>;
     return data['content'] as String;
@@ -251,17 +256,33 @@ class ApiClient {
   Future<String> regenerateAIPost(String originalBody, String topic, [String? instructions]) async {
     final uri = _uri('/ai/regenerate');
     final headers = await _headers();
+    final customApiKey = await _storage.getGeminiApiKey();
+    final Map<String, dynamic> body = {
+      'original_body': originalBody,
+      'topic': topic,
+      'instructions': instructions,
+    };
+    if (customApiKey != null && customApiKey.isNotEmpty) {
+      body['gemini_api_key'] = customApiKey;
+    }
     final res = await http.post(
       uri,
       headers: headers,
-      body: jsonEncode({
-        'original_body': originalBody,
-        'topic': topic,
-        'instructions': instructions,
-      }),
+      body: jsonEncode(body),
     ).timeout(const Duration(seconds: 45));
     final data = await _handleResponse(res) as Map<String, dynamic>;
     return data['content'] as String;
+  }
+
+  Future<Map<String, dynamic>> connectLinkedInManual(String accessToken) async {
+    final uri = _uri('/linkedin/connect-manual');
+    final headers = await _headers();
+    final res = await http.post(
+      uri,
+      headers: headers,
+      body: jsonEncode({'access_token': accessToken}),
+    ).timeout(const Duration(seconds: 25));
+    return await _handleResponse(res) as Map<String, dynamic>;
   }
 
   // --- Admin API ---

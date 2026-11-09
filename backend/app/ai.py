@@ -115,17 +115,18 @@ class GeminiProvider(AIProvider):
         )
         return await self._call_gemini_with_retry(prompt)
 
-def get_ai_service() -> AIProvider:
+def get_ai_service(custom_api_key: str | None = None) -> AIProvider:
     provider = settings.ai_provider.lower().strip()
+    api_key = custom_api_key or settings.ai_api_key
     if provider == "gemini":
-        return GeminiProvider(api_key=settings.ai_api_key, model=settings.ai_model)
+        return GeminiProvider(api_key=api_key, model=settings.ai_model)
     else:
         raise HTTPException(503, f"AI provider '{settings.ai_provider}' is not supported")
 
-async def generate_cybersecurity_post(topic: str = "cybersecurity") -> str:
-    service = get_ai_service()
+async def generate_cybersecurity_post(topic: str = "cybersecurity", custom_api_key: str | None = None) -> str:
+    service = get_ai_service(custom_api_key)
     return await service.generate_post(topic)
 
-async def regenerate_cybersecurity_post(original_body: str, topic: str = "cybersecurity", instructions: str | None = None) -> str:
-    service = get_ai_service()
+async def regenerate_cybersecurity_post(original_body: str, topic: str = "cybersecurity", instructions: str | None = None, custom_api_key: str | None = None) -> str:
+    service = get_ai_service(custom_api_key)
     return await service.regenerate_post(original_body, topic, instructions)

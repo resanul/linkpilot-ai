@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/api_client.dart';
 import '../services/sync_service.dart';
+import '../services/secure_storage_service.dart';
 import 'post_editor_screen.dart';
 
 class AIGeneratorScreen extends StatefulWidget {
@@ -45,6 +46,20 @@ class _AIGeneratorScreenState extends State<AIGeneratorScreen> {
   void initState() {
     super.initState();
     _selectedTopic = _topics[0];
+    _loadPreferences();
+  }
+
+  Future<void> _loadPreferences() async {
+    final preferred = await SecureStorageService.instance.getPreferredTopics();
+    if (preferred.isNotEmpty && mounted) {
+      setState(() {
+        for (final p in preferred.reversed) {
+          _topics.remove(p);
+          _topics.insert(0, p);
+        }
+        _selectedTopic = _topics[0];
+      });
+    }
   }
 
   String get _effectiveTopic {

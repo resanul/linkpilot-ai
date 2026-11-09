@@ -9,6 +9,9 @@ class SecureStorageService {
   static const String _keyAuthToken = 'auth_token';
   static const String _keyBaseUrl = 'api_base_url';
   static const String _keyUserEmail = 'user_email';
+  static const String _keyGeminiApiKey = 'gemini_api_key';
+  static const String _keyLinkedInToken = 'linkedin_token';
+  static const String _keyPreferredTopics = 'preferred_topics';
 
   Future<void> saveAuthToken(String token) async {
     await _storage.write(key: _keyAuthToken, value: token);
@@ -36,6 +39,32 @@ class SecureStorageService {
 
   Future<String?> getUserEmail() async {
     return await _storage.read(key: _keyUserEmail);
+  }
+
+  Future<void> saveGeminiApiKey(String key) async {
+    await _storage.write(key: _keyGeminiApiKey, value: key);
+  }
+
+  Future<String?> getGeminiApiKey() async {
+    return await _storage.read(key: _keyGeminiApiKey);
+  }
+
+  Future<void> saveLinkedInToken(String token) async {
+    await _storage.write(key: _keyLinkedInToken, value: token);
+  }
+
+  Future<String?> getLinkedInToken() async {
+    return await _storage.read(key: _keyLinkedInToken);
+  }
+
+  Future<void> savePreferredTopics(List<String> topics) async {
+    await _storage.write(key: _keyPreferredTopics, value: topics.join('|||'));
+  }
+
+  Future<List<String>> getPreferredTopics() async {
+    final raw = await _storage.read(key: _keyPreferredTopics);
+    if (raw == null || raw.trim().isEmpty) return [];
+    return raw.split('|||').where((s) => s.isNotEmpty).toList();
   }
 
   Future<void> clearAll() async {

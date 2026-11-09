@@ -60,11 +60,16 @@ class StaffCreate(BaseModel):
 
 class AIGenerateRequest(BaseModel):
     topic: str = Field(default="cybersecurity", max_length=200)
+    gemini_api_key: str | None = Field(default=None, max_length=255)
 
 class AIRegenerateRequest(BaseModel):
     original_body: str = Field(min_length=1, max_length=3000)
     topic: str = Field(default="cybersecurity", max_length=200)
     instructions: str | None = Field(default=None, max_length=500)
+    gemini_api_key: str | None = Field(default=None, max_length=255)
+
+class LinkedInManualConnect(BaseModel):
+    access_token: str = Field(min_length=10)
 
 class UserProfileOut(BaseModel):
     id: str

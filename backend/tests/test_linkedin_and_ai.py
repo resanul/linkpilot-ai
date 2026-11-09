@@ -100,3 +100,17 @@ def test_ai_generate_and_regenerate(client, activated_customer_headers):
         )
         assert regen_resp.status_code == 200
         assert "content" in regen_resp.json()
+
+def test_linkedin_connect_manual(client, activated_customer_headers, db):
+    mock_profile = {"sub": "manual-sub-123", "name": "Bob Cybersecurity"}
+    with patch("app.main.get_profile", new_callable=AsyncMock) as mock_p:
+        mock_p.return_value = mock_profile
+
+        resp = client.post(
+            "/linkedin/connect-manual",
+            json={"access_token": "AQX-manual-access-token-123456789"},
+            headers=activated_customer_headers
+        )
+        assert resp.status_code == 200
+        assert resp.json()["connected"] is True
+        assert resp.json()["profile_name"] == "Bob Cybersecurity"

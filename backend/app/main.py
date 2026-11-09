@@ -18,7 +18,8 @@ from .models import User, License, Post, StaffAdmin, OAuthState, LinkedInConnect
 from .schemas import (
     LicenseActivate, PostCreate, PostUpdate, PostOut,
     PostSyncRequest, PostSyncResponse, StaffCreate,
-    AIGenerateRequest, AIRegenerateRequest, UserProfileOut, AuditLogOut
+    AIGenerateRequest, AIRegenerateRequest, UserProfileOut, AuditLogOut,
+    LinkedInManualConnect
 )
 from .security import verify_google_id_token, hash_license_key, encrypt_secret
 from .linkedin import authorization_url, exchange_code, get_profile
@@ -325,6 +326,48 @@ def linkedin_disconnect(user: User = Depends(require_active_license), db: Sessio
         log_audit(db, user.id, user.email, "LINKEDIN_DISCONNECTED", "linkedin_connection", user.id, "Disconnected account")
     return {"connected": False, "message": "LinkedIn account disconnected"}
 
+@app.post("/linkedin/connect-manual")
+async def linkedin_connect_manual(payload: LinkedInManualConnect, user: User = Depends(require_active_license), db: Session = Depends(get_db)):
+    token = payload.access_token.strip()
+    profile_name = "Personal Profile"
+    subject = f"manual_{user.id[:8]}"
+
+    try:
+        profile = await get_profile(token)
+        first = profile.get("localizedFirstName", "")
+        last = profile.get("localizedLastName", "")
+        profile_name = profile.get("name") or f"{first} {last}".strip() or "LinkedIn Member"
+        subject = profile.get("sub") or profile.get("id") or subject
+    except Exception as e:
+        logger.warning("Could not fetch remote profile during manual connect: %s. Using default profile.", e)
+
+    enc_token = encrypt_secret(token)
+    now = datetime.now(timezone.utc)
+    conn = db.query(LinkedInConnection).filter_by(user_id=user.id).first()
+
+    if not conn:
+        conn = LinkedInConnection(
+            id=str(uuid4()),
+            user_id=user.id,
+            encrypted_access_token=enc_token,
+            person_urn=f"urn:li:person:{subject}",
+            profile_name=profile_name,
+            expires_at=now + timedelta(days=60),
+            created_at=now,
+            updated_at=now
+        )
+        db.add(conn)
+    else:
+        conn.encrypted_access_token = enc_token
+        conn.person_urn = f"urn:li:person:{subject}"
+        conn.profile_name = profile_name
+        conn.expires_at = now + timedelta(days=60)
+        conn.updated_at = now
+
+    log_audit(db, user.id, user.email, "LINKEDIN_CONNECTED_MANUAL", "linkedin_connection", subject, f"Connected as {profile_name}")
+    db.commit()
+    return {"connected": True, "message": f"LinkedIn connected successfully as {profile_name}.", "profile_name": profile_name}
+
 # --- Post Management & Cloud History ---
 
 @app.get("/posts", response_model=list[PostOut])
@@ -474,13 +517,13 @@ def sync_posts(payload: PostSyncRequest, user: User = Depends(require_active_lic
 @app.post("/ai/generate")
 @limiter.limit("20/minute")
 async def ai_generate(request: Request, payload: AIGenerateRequest, user: User = Depends(require_active_license)):
-    content = await generate_cybersecurity_post(payload.topic)
+    content = await generate_cybersecurity_post(payload.topic, custom_api_key=payload.gemini_api_key)
     return {"content": content, "topic": payload.topic, "language": "en"}
 
 @app.post("/ai/regenerate")
 @limiter.limit("20/minute")
 async def ai_regenerate(request: Request, payload: AIRegenerateRequest, user: User = Depends(require_active_license)):
-    content = await regenerate_cybersecurity_post(payload.original_body, payload.topic, payload.instructions)
+    content = await regenerate_cybersecurity_post(payload.original_body, payload.topic, payload.instructions, custom_api_key=payload.gemini_api_key)
     return {"content": content, "topic": payload.topic, "language": "en"}
 
 # --- Admin Endpoints ---
