@@ -9,20 +9,15 @@ import 'ai_generator_screen.dart';
 import 'post_editor_screen.dart';
 import 'approval_queue_screen.dart';
 import 'scheduler_screen.dart';
-import 'admin/admin_dashboard_screen.dart';
-import 'admin/admin_licenses_screen.dart';
-import 'admin/admin_customers_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final ApiClient apiClient;
   final UserModel initialUser;
-  final bool initialAdminMode;
 
   const DashboardScreen({
     super.key,
     required this.apiClient,
     required this.initialUser,
-    this.initialAdminMode = false,
   });
 
   @override
@@ -32,7 +27,6 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   late UserModel _user;
   late SyncService _syncService;
-  bool _adminMode = false;
   int _tab = 0;
 
   int _publishedCount = 0;
@@ -43,10 +37,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _user = widget.initialUser;
-    _adminMode = widget.initialAdminMode;
-    if (_adminMode) {
-      widget.apiClient.setAdminPin('889900');
-    }
     _syncService = SyncService(apiClient: widget.apiClient);
     _refreshAll();
   }
@@ -71,74 +61,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } catch (_) {}
   }
 
-  void _promptAdminPin() {
-    final pinController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.shield, color: Color(0xFF2563EB)),
-            SizedBox(width: 8),
-            Text('Admin Portal Authentication', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Enter Master Admin PIN to mint 30-day / Enterprise licenses and view customers:',
-              style: TextStyle(fontSize: 12, color: Colors.black54),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: pinController,
-              obscureText: true,
-              keyboardType: TextInputType.number,
-              autofocus: true,
-              decoration: InputDecoration(
-                hintText: 'Default PIN: 889900',
-                filled: true,
-                fillColor: Colors.grey.shade50,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () {
-              final pin = pinController.text.trim();
-              if (pin == '889900' || pin == 'admin') {
-                widget.apiClient.setAdminPin('889900');
-                Navigator.pop(ctx);
-                setState(() {
-                  _adminMode = true;
-                  _tab = 0;
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Admin Portal Unlocked!')),
-                );
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Incorrect Master Admin PIN. Access Denied.')),
-                );
-              }
-            },
-            child: const Text('Unlock'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     const canvas = Color(0xFFF4F6FA);
-    const blue = Color(0xFF2563EB);
 
     final customerPages = [
       _buildHomeView(),
@@ -151,65 +76,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     ];
 
-    final adminPages = [
-      AdminDashboardScreen(apiClient: widget.apiClient),
-      AdminLicensesScreen(apiClient: widget.apiClient),
-      AdminCustomersScreen(apiClient: widget.apiClient),
-    ];
-
     return Scaffold(
       backgroundColor: canvas,
       appBar: AppBar(
         backgroundColor: canvas,
         elevation: 0,
-        title: Text(
-          _adminMode ? '🛡️ Admin Console' : '⚡ LinkPilot AI',
-          style: const TextStyle(fontWeight: FontWeight.w900),
-        ),
+        title: const Text('⚡ LinkPilot AI', style: TextStyle(fontWeight: FontWeight.w900)),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: TextButton.icon(
-              style: TextButton.styleFrom(
-                foregroundColor: _adminMode ? Colors.amber.shade900 : blue,
-                backgroundColor: _adminMode ? Colors.amber.shade100 : Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              ),
-              icon: Icon(_adminMode ? Icons.arrow_back : Icons.shield_outlined, size: 16),
-              label: Text(_adminMode ? 'User Mode' : 'Admin Portal', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-              onPressed: () {
-                if (_adminMode) {
-                  widget.apiClient.setAdminPin(null);
-                  setState(() {
-                    _adminMode = false;
-                    _tab = 0;
-                  });
-                } else {
-                  _promptAdminPin();
-                }
-              },
-            ),
+          IconButton(
+            tooltip: 'Refresh Status',
+            icon: const Icon(Icons.refresh, color: Colors.black54),
+            onPressed: _refreshAll,
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: IndexedStack(
         index: _tab,
-        children: _adminMode ? adminPages : customerPages,
+        children: customerPages,
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
         onDestinationSelected: (v) => setState(() => _tab = v),
-        destinations: _adminMode
-            ? const [
-                NavigationDestination(icon: Icon(Icons.dashboard_outlined), label: 'Overview'),
-                NavigationDestination(icon: Icon(Icons.key_outlined), label: 'Licenses'),
-                NavigationDestination(icon: Icon(Icons.people_outline), label: 'Customers'),
-              ]
-            : const [
-                NavigationDestination(icon: Icon(Icons.dashboard_outlined), label: 'Home'),
-                NavigationDestination(icon: Icon(Icons.history), label: 'History'),
-                NavigationDestination(icon: Icon(Icons.settings_outlined), label: 'Settings'),
-              ],
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Home'),
+          NavigationDestination(icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history), label: 'History'),
+          NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: 'Settings'),
+        ],
       ),
     );
   }

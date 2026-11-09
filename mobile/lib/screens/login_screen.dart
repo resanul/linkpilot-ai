@@ -4,6 +4,7 @@ import '../services/secure_storage_service.dart';
 import '../services/api_client.dart';
 import 'license_activation_screen.dart';
 import 'dashboard_screen.dart';
+import 'admin/admin_portal_screen.dart';
 
 enum LoginTab { user, admin }
 
@@ -45,7 +46,6 @@ class _LoginScreenState extends State<LoginScreen> {
         builder: (_) => DashboardScreen(
           apiClient: widget.apiClient,
           initialUser: user,
-          initialAdminMode: false,
         ),
       ),
     );
@@ -79,21 +79,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
       await SecureStorageService.instance.saveUserEmail(adminEmail);
 
-      UserModel adminUser;
-      try {
-        adminUser = await widget.apiClient.getUserProfile();
-      } catch (_) {
-        adminUser = UserModel.adminUser(email: adminEmail);
-      }
-
       if (!mounted) return;
 
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) => DashboardScreen(
+          builder: (_) => AdminPortalScreen(
             apiClient: widget.apiClient,
-            initialUser: adminUser,
-            initialAdminMode: true,
           ),
         ),
       );
@@ -149,13 +140,20 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         );
+      } else if (forceAdmin || user.isAdmin) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => AdminPortalScreen(
+              apiClient: widget.apiClient,
+            ),
+          ),
+        );
       } else {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
             builder: (_) => DashboardScreen(
               apiClient: widget.apiClient,
               initialUser: user,
-              initialAdminMode: forceAdmin || user.isAdmin,
             ),
           ),
         );
